@@ -13,9 +13,14 @@ export async function POST(request:Request){
   const {data:{user},error:userError}=await publicClient.auth.getUser(token);
   if(userError||!user?.email)return NextResponse.json({error:'The invitation session is invalid or expired.'},{status:401});
   const admin=createClient(url,serviceKey,{auth:{autoRefreshToken:false,persistSession:false}});
+  const email=user.email.trim().toLowerCase();
+  const {data:existing,error:lookupError}=await admin.from('staff_members').select('*').or(`auth_user_id.eq.${user.id},email.ilike.${email}`).limit(1).maybeSingle();
+  if(lookupError)return NextResponse.json({error:`Unable to locate staff record: ${lookupError.message}`},{status:500});
+  if(!existing)return NextResponse.json({error:'No employee record matches this invitation. Ask an administrator to resend it.'},{status:404});
   const now=new Date().toISOString();
-  const {data:staff,error}=await admin.from('staff_members').update({auth_user_id:user.id,status:'Active',accepted_at:now}).eq('email',user.email.toLowerCase()).select().single();
+  const {data:staff,error}=await admin.from('staff_members').update({auth_user_id:user.id,email,status:'Active',accepted_at:existing.accepted_at||now}).eq('id',existing.id).select().single();
   if(error)return NextResponse.json({error:`Unable to activate staff record: ${error.message}`},{status:500});
+  await admin.auth.admin.updateUserById(user.id,{user_metadata:{...user.user_metadata,full_name:staff.full_name,access_role:staff.role_name,department:staff.department,job_title:staff.job_title,staff_status:'Active'}});
   return NextResponse.json({ok:true,staff});
  }catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Unable to activate invitation.'},{status:500})}
 }

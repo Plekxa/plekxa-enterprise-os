@@ -52,6 +52,7 @@ export const LibraryBig = makeIcon(<><rect x="4" y="3" width="5" height="18" rx=
 export const LifeBuoy = makeIcon(<><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="m6 6 4 4M14 14l4 4M18 6l-4 4M10 14l-4 4"/></>);
 export const Lightbulb = makeIcon(<><path d="M9 18h6M10 22h4"/><path d="M8 14a6 6 0 1 1 8 0c-1 1-1 2-1 4H9c0-2 0-3-1-4"/></>);
 export const Megaphone = makeIcon(<><path d="M3 11v4h4l10 4V7L7 11z"/><path d="M7 15l1 5h3"/></>);
+export const Menu = makeIcon(<><path d="M4 6h16M4 12h16M4 18h16"/></>);
 export const MoreHorizontal = makeIcon(<><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/></>);
 export const Music = makeIcon(<><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></>);
 export const Newspaper = makeIcon(<><path d="M4 5h16v15H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></>);

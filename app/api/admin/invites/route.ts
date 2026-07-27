@@ -10,7 +10,7 @@ export async function POST(request:Request){
   const pending={email:email.trim().toLowerCase(),full_name:name.trim(),department:department||null,job_title:job||null,role_name:access||'Viewer',status:'Invited',invited_at:new Date().toISOString()};
   const {data:staff,error:staffError}=await s.from('staff_members').upsert(pending,{onConflict:'email'}).select().single();
   if(staffError)throw staffError;
-  const redirectTo=`${(process.env.NEXT_PUBLIC_APP_URL||'https://admin.plekxa.com').replace(/\/$/,'')}/login?invited=1`;
+  const redirectTo=`${(process.env.NEXT_PUBLIC_APP_URL||'https://admin.plekxa.com').replace(/\/$/,'')}/accept-invite`;
   const {data,error}=await s.auth.admin.inviteUserByEmail(pending.email,{redirectTo,data:{full_name:pending.full_name,department:pending.department,job_title:pending.job_title,access_role:pending.role_name}});
   if(error){return NextResponse.json({error:`The employee was recorded, but Supabase could not send the email: ${error.message}`,staff},{status:502})}
   if(data.user?.id)await s.from('staff_members').update({auth_user_id:data.user.id}).eq('id',staff.id);

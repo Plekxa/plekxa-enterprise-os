@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import {useEffect,useState} from 'react';
 import {useRouter} from 'next/navigation';
+import type {AuthChangeEvent,Session} from '@supabase/supabase-js';
 import {createClient} from '@/lib/supabase/client';
 
 export default function AcceptInvitePage(){
@@ -20,7 +21,7 @@ export default function AcceptInvitePage(){
   const verify=async()=>{
    const {data:{session}}=await supabase.auth.getSession();
    if(session&&mounted){setReady(true);setMessage('Invitation verified. Create a password to activate your account.');return}
-   const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,nextSession)=>{
+   const {data:{subscription}}=supabase.auth.onAuthStateChange((_event:AuthChangeEvent,nextSession:Session|null)=>{
     if(nextSession&&mounted){setReady(true);setMessage('Invitation verified. Create a password to activate your account.')}
    });
    window.setTimeout(async()=>{

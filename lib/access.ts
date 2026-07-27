@@ -1,8 +1,8 @@
 export type AccessRole=string;
 export type PermissionRole={id:string;name:string;description:string;permissions:string[];system:boolean;master:boolean};
-export const ALL_ROUTES=['/dashboard','/people','/creators','/applications','/projects','/proposals','/contracts','/assets','/experiences','/content','/newsroom','/marketing','/crm','/careers','/support','/notifications','/finance','/analytics','/activity','/settings'];
+export const ALL_ROUTES=['/dashboard','/people','/creators','/applications','/projects','/proposals','/contracts','/assets','/experiences','/content','/newsroom','/marketing','/crm','/careers','/support','/notifications','/finance','/analytics','/activity','/settings','/profile','/search'];
 export const ROUTE_LABELS:Record<string,string>={
- '/dashboard':'Dashboard','/people':'People & Access','/creators':'Creator Directory','/applications':'Studio Submissions','/projects':'Projects','/proposals':'Proposals','/contracts':'Contracts','/assets':'Asset Registry','/experiences':'Experiences','/content':'Content Studio','/newsroom':'Newsroom','/marketing':'Marketing','/crm':'CRM','/careers':'Careers','/support':'Support','/notifications':'Notifications','/finance':'Finance','/analytics':'Analytics','/activity':'Audit Activity','/settings':'Settings'
+ '/dashboard':'Dashboard','/people':'People & Access','/creators':'Creator Directory','/applications':'Studio Submissions','/projects':'Projects','/proposals':'Proposals','/contracts':'Contracts','/assets':'Asset Registry','/experiences':'Experiences','/content':'Content Studio','/newsroom':'Newsroom','/marketing':'Marketing','/crm':'CRM','/careers':'Careers','/support':'Support','/notifications':'Notifications','/finance':'Finance','/analytics':'Analytics','/activity':'Audit Activity','/settings':'Settings','/profile':'My Profile','/search':'Global Search'
 };
 export const DEFAULT_ROLES:PermissionRole[]=[
  {id:'master-admin',name:'Master Admin',description:'Company owner with every permission and reserved ownership controls.',permissions:ALL_ROUTES,system:true,master:true},

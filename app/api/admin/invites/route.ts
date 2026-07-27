@@ -1,3 +1,19 @@
 import {NextResponse} from 'next/server';
 import {createClient} from '@supabase/supabase-js';
-export async function POST(request:Request){try{const body=await request.json();const {email,name,department,job,access}=body;if(!email||!name)return NextResponse.json({error:'Name and email are required'},{status:400});const url=process.env.NEXT_PUBLIC_SUPABASE_URL;const serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!url||!serviceKey)return NextResponse.json({error:'Supabase service credentials are not configured'},{status:503});const supabase=createClient(url,serviceKey,{auth:{autoRefreshToken:false,persistSession:false}});const redirectTo=process.env.NEXT_PUBLIC_APP_URL?`${process.env.NEXT_PUBLIC_APP_URL}/login?invited=1`:undefined;const {data,error}=await supabase.auth.admin.inviteUserByEmail(email,{redirectTo,data:{full_name:name,department,job_title:job,access_role:access}});if(error)throw error;await supabase.from('staff_members').upsert({auth_user_id:data.user?.id,email,full_name:name,department,job_title:job,role_name:access,status:'Invited'},{onConflict:'email'});return NextResponse.json({ok:true,userId:data.user?.id})}catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Unable to send invitation'},{status:500})}}
+export async function POST(request:Request){
+ try{
+  const {email,name,department,job,access}=await request.json();
+  if(!email||!name)return NextResponse.json({error:'Name and email are required'},{status:400});
+  const url=process.env.NEXT_PUBLIC_SUPABASE_URL;const serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if(!url||!serviceKey)return NextResponse.json({error:'Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel, then redeploy.'},{status:503});
+  const s=createClient(url,serviceKey,{auth:{autoRefreshToken:false,persistSession:false}});
+  const pending={email:email.trim().toLowerCase(),full_name:name.trim(),department:department||null,job_title:job||null,role_name:access||'Viewer',status:'Invited',invited_at:new Date().toISOString()};
+  const {data:staff,error:staffError}=await s.from('staff_members').upsert(pending,{onConflict:'email'}).select().single();
+  if(staffError)throw staffError;
+  const redirectTo=`${(process.env.NEXT_PUBLIC_APP_URL||'https://admin.plekxa.com').replace(/\/$/,'')}/login?invited=1`;
+  const {data,error}=await s.auth.admin.inviteUserByEmail(pending.email,{redirectTo,data:{full_name:pending.full_name,department:pending.department,job_title:pending.job_title,access_role:pending.role_name}});
+  if(error){return NextResponse.json({error:`The employee was recorded, but Supabase could not send the email: ${error.message}`,staff},{status:502})}
+  if(data.user?.id)await s.from('staff_members').update({auth_user_id:data.user.id}).eq('id',staff.id);
+  return NextResponse.json({ok:true,staff:{...staff,auth_user_id:data.user?.id}})
+ }catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Unable to send invitation'},{status:500})}
+}

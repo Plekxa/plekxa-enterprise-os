@@ -1,0 +1,1 @@
+import type {Metric} from '@/lib/types';export default function MetricCards({items}:{items:Metric[]}){return <div className="metrics">{items.map(x=><div className="metric" key={x.label}><div className="metric-label">{x.label}</div><div className="metric-value">{x.value}</div>{x.change&&<div className="metric-change">{x.change}</div>}</div>)}</div>}

@@ -1,0 +1,2 @@
+import {Plus} from '@/components/icons';
+export default function PageHeader({eyebrow,title,copy,action='Create new'}:{eyebrow:string,title:string,copy:string,action?:string}){return <div className="page-head"><div><div className="eyebrow">{eyebrow}</div><h1 className="page-title">{title}</h1><p className="page-copy">{copy}</p></div><button className="button primary"><Plus size={15}/>{action}</button></div>}

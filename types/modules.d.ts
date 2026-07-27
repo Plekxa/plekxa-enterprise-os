@@ -1,0 +1,2 @@
+declare module 'lucide-react' { import type { ComponentType } from 'react'; export const Bell: ComponentType<any>; export const Search: ComponentType<any>; export const Plus: ComponentType<any>; export const ArrowUpRight: ComponentType<any>; const icons: Record<string,ComponentType<any>>; export = icons; }
+declare module '@supabase/ssr' { export function createBrowserClient(...args:any[]):any; export function createServerClient(...args:any[]):any; }

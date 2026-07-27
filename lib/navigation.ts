@@ -1,0 +1,23 @@
+import type { NavItem } from './types';
+export const navigation: NavItem[] = [
+{label:'Command centre',href:'/dashboard',icon:'LayoutDashboard',section:'Workspace'},
+{label:'People & access',href:'/people',icon:'Users',section:'Company'},
+{label:'Creator directory',href:'/creators',icon:'UserRound',section:'Creator operations'},
+{label:'Applications',href:'/applications',icon:'ClipboardList',section:'Creator operations'},
+{label:'Projects',href:'/projects',icon:'FolderKanban',section:'Project operations'},
+{label:'Proposals',href:'/proposals',icon:'Lightbulb',section:'Project operations'},
+{label:'Contracts',href:'/contracts',icon:'FileSignature',section:'Rights & registry'},
+{label:'Asset registry',href:'/assets',icon:'LibraryBig',section:'Rights & registry'},
+{label:'Experiences',href:'/experiences',icon:'Sparkles',section:'Entertainment'},
+{label:'Entertainment CMS',href:'/content',icon:'PlaySquare',section:'Entertainment'},
+{label:'Content Studio',href:'/newsroom',icon:'Newspaper',section:'Growth & corporate'},
+{label:'Marketing',href:'/marketing',icon:'Megaphone',section:'Growth & corporate'},
+{label:'Relationship CRM',href:'/crm',icon:'Handshake',section:'Growth & corporate'},
+{label:'Careers',href:'/careers',icon:'BriefcaseBusiness',section:'Growth & corporate'},
+{label:'Support centre',href:'/support',icon:'LifeBuoy',section:'Service'},
+{label:'Notifications',href:'/notifications',icon:'Bell',section:'Service'},
+{label:'Finance',href:'/finance',icon:'CircleDollarSign',section:'Governance'},
+{label:'Analytics',href:'/analytics',icon:'ChartNoAxesCombined',section:'Governance'},
+{label:'Audit log',href:'/activity',icon:'ScrollText',section:'Governance'},
+{label:'Settings',href:'/settings',icon:'Settings',section:'Governance'},
+];

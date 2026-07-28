@@ -1,1 +1,2 @@
-import StudioSubmissionsWorkspace from '@/components/StudioSubmissionsWorkspace';export default function Page(){return <StudioSubmissionsWorkspace/>}
+import ApplicationsWorkspace from '@/components/ApplicationsWorkspace';
+export default function Page(){return <ApplicationsWorkspace/>}

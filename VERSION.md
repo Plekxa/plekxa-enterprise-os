@@ -1,7 +1,3 @@
-# Plekxa Enterprise OS v1.9.2
+# Plekxa Enterprise OS v1.10
 
-Patch release:
-- reliable invitation acceptance reconciliation (`Invited` → `Active`)
-- authenticated staff record linked by user ID or case-insensitive email
-- mobile hamburger navigation and slide-out sidebar
-- mobile navigation closes after route selection
+Applications is now a live Supabase module. It reads creator_applications, resolves creators/projects, and persists shortlist, accept, and reject decisions.

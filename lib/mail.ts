@@ -7,7 +7,10 @@ type MailInput = {
   html?: string;
 };
 
-export async function sendMail(input: MailInput): Promise<{ sent: boolean; reason?: string }> {
+export async function sendMail(input: MailInput): Promise<{
+  sent: boolean;
+  reason?: string;
+}> {
   const host = process.env.SMTP_HOST;
   const port = Number(process.env.SMTP_PORT || '587');
   const user = process.env.SMTP_USER;

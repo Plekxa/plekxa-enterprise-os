@@ -67,7 +67,7 @@ async function notifyDecision(
   });
 
   const identity = await authIdentity(s, userId);
-  let mail = { sent: false, reason: 'No email address available.' };
+  let mail = { sent: false, reason?: 'No email address available.' };
   if (identity?.email) {
     try {
       mail = await sendMail({

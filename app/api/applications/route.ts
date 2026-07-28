@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendMail } from '@/lib/mail';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,75 @@ function message(error: unknown) {
   if (error instanceof Error) return error.message;
   if (error && typeof error === 'object' && 'message' in error) return String(error.message);
   return 'Database request failed.';
+}
+
+async function authIdentity(s: ReturnType<typeof createClient>, userId: string) {
+  const { data, error } = await s.auth.admin.getUserById(userId);
+  if (error || !data.user) return null;
+  const metadata = data.user.user_metadata ?? {};
+  return {
+    user_id: data.user.id,
+    legal_name: metadata.full_name || metadata.name || null,
+    stage_name: metadata.stage_name || null,
+    email: data.user.email || null,
+  };
+}
+
+async function notifyDecision(
+  s: ReturnType<typeof createClient>,
+  application: DbRow,
+  status: string,
+  projectTitle: string,
+  reason?: string | null,
+) {
+  const userId = String(application.creator_user_id || '');
+  if (!userId) return { notified: false, emailed: false, reason: 'Application has no creator_user_id.' };
+
+  const accepted = status === 'accepted';
+  const shortlisted = status === 'shortlisted';
+  const title = accepted
+    ? 'Your Plekxa application was accepted'
+    : shortlisted
+      ? 'Your Plekxa application was shortlisted'
+      : 'Update on your Plekxa application';
+  const messageText = accepted
+    ? `Your application for ${projectTitle} has been accepted.`
+    : shortlisted
+      ? `Your application for ${projectTitle} has been shortlisted for further review.`
+      : `Your application for ${projectTitle} was not selected.${reason ? ` Reason: ${reason}` : ''}`;
+
+  const { error: notificationError } = await s.from('notifications').insert({
+    recipient_id: userId,
+    type: 'application_decision',
+    title,
+    message: messageText,
+    action_url: '/applications',
+    entity_type: 'creator_application',
+    entity_id: application.id,
+    metadata: { status, project_title: projectTitle },
+  });
+
+  const identity = await authIdentity(s, userId);
+  let mail = { sent: false, reason: 'No email address available.' };
+  if (identity?.email) {
+    try {
+      mail = await sendMail({
+        to: identity.email,
+        subject: title,
+        text: `${messageText}
+
+Sign in to Plekxa Studio to view the application: ${process.env.NEXT_PUBLIC_STUDIO_URL || 'https://studio.plekxa.com'}/applications`,
+      });
+    } catch (error) {
+      mail = { sent: false, reason: message(error) };
+    }
+  }
+
+  return {
+    notified: !notificationError,
+    emailed: mail.sent,
+    reason: notificationError?.message || mail.reason,
+  };
 }
 
 export async function GET() {
@@ -58,11 +128,21 @@ export async function GET() {
       if (creator.user_id) creatorMap.set(String(creator.user_id), creator);
     }
 
+    for (const userId of userIds) {
+      if (!creatorMap.has(userId)) {
+        const identity = await authIdentity(s, userId);
+        if (identity) creatorMap.set(userId, identity);
+      }
+    }
+
     return NextResponse.json({
       applications: rows.map((application) => ({
         ...application,
         project: projectMap.get(String(application.project_id)) ?? null,
-        creator: creatorMap.get(String(application.creator_id)) ?? creatorMap.get(String(application.creator_user_id)) ?? null,
+        creator: creatorMap.get(String(application.creator_id)) ?? creatorMap.get(String(application.creator_user_id)) ?? {
+          legal_name: application.applicant_name || null,
+          email: application.applicant_email || null,
+        },
       })),
     });
   } catch (error) {
@@ -88,7 +168,17 @@ export async function PATCH(request: Request) {
 
     const { data, error } = await s.from('creator_applications').update(update).eq('id', id).select('*').single();
     if (error) throw error;
-    return NextResponse.json({ application: data });
+
+    let delivery = null;
+    if (['accepted', 'rejected', 'shortlisted'].includes(status)) {
+      const { data: project } = data.project_id
+        ? await s.from('projects').select('*').eq('id', data.project_id).maybeSingle()
+        : { data: null };
+      const projectTitle = String(project?.title || project?.name || 'your selected project');
+      delivery = await notifyDecision(s, data, status, projectTitle, String(body.rejectionReason || '') || null);
+    }
+
+    return NextResponse.json({ application: data, delivery });
   } catch (error) {
     console.error('Admin applications PATCH error:', error);
     return NextResponse.json({ error: message(error) }, { status: 500 });

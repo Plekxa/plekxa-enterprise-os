@@ -1,2 +1,2 @@
-import ModulePage from '@/components/ModulePage';
-export default function Page(){return <ModulePage slug="proposals"/>}
+import ProposalsWorkspace from '@/components/ProposalsWorkspace';
+export default function Page(){return <ProposalsWorkspace/>}

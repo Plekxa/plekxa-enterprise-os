@@ -1,1 +1,1 @@
-import AnalyticsWorkspace from '@/components/AnalyticsWorkspace';export default function Analytics(){return <AnalyticsWorkspace/>}
+import LiveModuleWorkspace from '@/components/LiveModuleWorkspace';import{liveModules}from'@/lib/live-modules';export default function Page(){return <LiveModuleWorkspace config={liveModules.analytics}/>}

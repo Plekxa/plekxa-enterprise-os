@@ -20,7 +20,10 @@ function message(error: unknown) {
   return 'Database request failed.';
 }
 
-async function authIdentity(s: ReturnType<typeof createClient>, userId: string) {
+async function authIdentity(
+  s: SupabaseClient<any, any, any>,
+  userId: string
+) {
   const { data, error } = await s.auth.admin.getUserById(userId);
   if (error || !data.user) return null;
   const metadata = data.user.user_metadata ?? {};

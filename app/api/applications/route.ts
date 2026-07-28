@@ -55,7 +55,7 @@ async function notifyDecision(
       ? `Your application for ${projectTitle} has been shortlisted for further review.`
       : `Your application for ${projectTitle} was not selected.${reason ? ` Reason: ${reason}` : ''}`;
 
-  const { error: notificationError } = await s.from('notifications').insert({
+  const { error: notificationError } = await (s.from('notifications') as any).insert({
     recipient_id: userId,
     type: 'application_decision',
     title,

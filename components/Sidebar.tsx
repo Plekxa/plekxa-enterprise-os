@@ -1,20 +1,18 @@
 'use client';
 import Image from 'next/image';
 import Link from 'next/link';
-import {useEffect,useState} from 'react';
+
 import {usePathname} from 'next/navigation';
 import * as Icons from '@/components/icons';
 import {navigation} from '@/lib/navigation';
-import {permissionsFor,readRoles} from '@/lib/access';
 
-type SidebarProps={mobileOpen?:boolean;onClose?:()=>void};
 
-export default function Sidebar({mobileOpen=false,onClose}:SidebarProps){
+type SidebarProps={mobileOpen?:boolean;onClose?:()=>void;access:{role:string;permissions:string[]}|null};
+
+export default function Sidebar({mobileOpen=false,onClose,access}:SidebarProps){
  const p=usePathname();
- const[role,setRole]=useState('Master Admin');
- useEffect(()=>{const sync=()=>setRole(localStorage.getItem('plekxa:current-role')||'Master Admin');sync();window.addEventListener('plekxa-role-change',sync);window.addEventListener('plekxa-permissions-change',sync);return()=>{window.removeEventListener('plekxa-role-change',sync);window.removeEventListener('plekxa-permissions-change',sync)}},[]);
- useEffect(()=>{onClose?.()},[p]);
- const allowed=permissionsFor(role,readRoles());let section='';
+ const role=access?.role||'Viewer';
+ const allowed=access?.permissions||[];let section='';
  return <>
   <button type="button" aria-label="Close navigation" className={`mobile-sidebar-backdrop ${mobileOpen?'open':''}`} onClick={onClose}/>
   <aside className={`sidebar ${mobileOpen?'mobile-open':''}`}>

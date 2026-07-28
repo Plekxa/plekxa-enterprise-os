@@ -50,7 +50,6 @@ export default function AcceptInvitePage(){
   const response=await fetch('/api/auth/accept-invite',{method:'POST',headers:{Authorization:`Bearer ${session.access_token}`}});
   const result=await response.json();
   if(!response.ok){setBusy(false);setMessage(result.error||'Your password was saved, but the staff account could not be activated. Contact an administrator.');return}
-  localStorage.setItem('plekxa:current-role',result.staff?.role_name||'Viewer');
   window.dispatchEvent(new Event('plekxa-role-change'));
   setMessage('Account activated. Opening Plekxa Enterprise OS…');
   router.replace('/dashboard');

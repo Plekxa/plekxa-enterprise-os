@@ -68,7 +68,7 @@ export async function PATCH(request: Request) {
     if (userId && ['approved', 'held', 'rejected'].includes(status)) {
       const title = status === 'approved' ? 'Your Plekxa proposal was approved' : status === 'held' ? 'Your Plekxa proposal is being held for future review' : 'Update on your Plekxa proposal';
       const text = status === 'approved' ? `Your proposal “${data.title}” has been approved.` : status === 'held' ? `Your proposal “${data.title}” has been placed on hold for future review.` : `Your proposal “${data.title}” was not selected.${body.reviewNotes ? ` Feedback: ${body.reviewNotes}` : ''}`;
-      const notification = await s.from('notifications').insert({ recipient_id: userId, type: 'proposal_decision', title, message: text, action_url: '/proposals', entity_type: 'proposal', entity_id: data.id, metadata: { status } });
+      const notification = await (s.from('notifications') as any).insert({ recipient_id: userId, type: 'proposal_decision', title, message: text, action_url: '/proposals', entity_type: 'proposal', entity_id: data.id, metadata: { status } });
       const auth = await identity(s, userId);
       let mail = { sent: false, reason: 'No email available.' };
       if (auth?.email) {

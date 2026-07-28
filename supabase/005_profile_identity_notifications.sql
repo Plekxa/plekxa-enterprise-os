@@ -50,7 +50,8 @@ with ranked as (
   from public.creator_profiles where user_id is not null
 )
 delete from public.creator_profiles p using ranked r where p.ctid=r.ctid and r.rn>1;
-create unique index if not exists creator_profiles_user_id_unique on public.creator_profiles(user_id) where user_id is not null;
+drop index if exists public.creator_profiles_user_id_unique;
+create unique index creator_profiles_user_id_unique on public.creator_profiles(user_id);
 
 -- Backfill portal profiles from Auth without overwriting completed profile data.
 insert into public.profiles (id,email,full_name,creator_type,created_at,updated_at)

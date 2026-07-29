@@ -18,7 +18,7 @@ function msg(error: unknown) {
   return 'Proposal request failed.';
 }
 
-async function identity(s: NonNullable<ReturnType<typeof admin>>, userId: string) {
+async function identity(s: any, userId: string) {
   const { data, error } = await s.auth.admin.getUserById(userId);
   if (error || !data.user) return null;
   const metadata = data.user.user_metadata ?? {};
@@ -70,7 +70,7 @@ export async function PATCH(request: Request) {
       const text = status === 'approved' ? `Your proposal “${data.title}” has been approved.` : status === 'held' ? `Your proposal “${data.title}” has been placed on hold for future review.` : `Your proposal “${data.title}” was not selected.${body.reviewNotes ? ` Feedback: ${body.reviewNotes}` : ''}`;
       const notification = await (s.from('notifications') as any).insert({ recipient_id: userId, type: 'proposal_decision', title, message: text, action_url: '/proposals', entity_type: 'proposal', entity_id: data.id, metadata: { status } });
       const auth = await identity(s, userId);
-      let mail = { sent: false, reason: 'No email available.' };
+      let mail: { sent: boolean; reason?: string } = { sent: false, reason: 'No email available.' };
       if (auth?.email) {
         try { mail = await sendMail({ to: auth.email, subject: title, text: `${text}\n\nView your proposals: ${process.env.NEXT_PUBLIC_STUDIO_URL || 'https://studio.plekxa.com'}/proposals` }); }
         catch (e) { mail = { sent: false, reason: msg(e) }; }

@@ -20,10 +20,7 @@ function message(error: unknown) {
   return 'Database request failed.';
 }
 
-async function authIdentity(
-  s: SupabaseClient<any, any, any>,
-  userId: string
-) {
+async function authIdentity(s: any, userId: string) {
   const { data, error } = await s.auth.admin.getUserById(userId);
   if (error || !data.user) return null;
   const metadata = data.user.user_metadata ?? {};
@@ -36,7 +33,7 @@ async function authIdentity(
 }
 
 async function notifyDecision(
-  s: ReturnType<typeof createClient>,
+  s: any,
   application: DbRow,
   status: string,
   projectTitle: string,
@@ -70,13 +67,7 @@ async function notifyDecision(
   });
 
   const identity = await authIdentity(s, userId);
-  let mail: {
-  sent: boolean;
-  reason?: string;
-} = {
-  sent: false,
-  reason: 'No email address available.',
-};
+  let mail: { sent: boolean; reason?: string } = { sent: false, reason: 'No email address available.' };
   if (identity?.email) {
     try {
       mail = await sendMail({

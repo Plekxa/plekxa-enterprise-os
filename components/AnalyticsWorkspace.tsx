@@ -1,49 +1,440 @@
 'use client';
-import {useEffect,useMemo,useState} from 'react';
-import {ArrowUpRight,Globe,Music,TrendingUp,Users} from '@/components/icons';
-type Department='Company overview'|'Executive'|'Creator Success'|'Projects'|'Registry & Rights'|'Finance'|'Content & Marketing'|'Support'|'Technology';
-const departments:Department[]=['Company overview','Executive','Creator Success','Projects','Registry & Rights','Finance','Content & Marketing','Support','Technology'];
-const data:Record<Department,{metrics:[string,string,string][];bars:number[];title:string;rank:[string,string][];secondary:[string,string][]}>={
- 'Company overview':{metrics:[['Revenue growth','+18.4%','Quarter over quarter'],['Creator growth','+10.8%','18 verified this month'],['Asset utilisation','47.7%','203 of 426 in active use'],['Audience markets','24','Countries with engagement']],bars:[72,88,64,95,78,86,91,83,97,89,94,100],title:'Operating growth',rank:[['Narrative music','84%'],['Reflection & wellbeing','72%'],['Podcast experiences','61%'],['Video collections','48%']],secondary:[['Nigeria','96'],['United Kingdom','41'],['Ghana','18'],['United States','12']]},
- 'Executive':{metrics:[['Operating revenue','$482,640','Current quarter'],['Net margin','31.8%','After creator PPR'],['Active projects','12','Across departments'],['Strategic risks','3','Require leadership review']],bars:[65,70,72,74,81,79,88,90,87,94,98,100],title:'Executive performance index',rank:[['Revenue plan','91%'],['Project delivery','84%'],['Creator network','76%'],['Product readiness','63%']],secondary:[['On track','17'],['Needs review','4'],['At risk','3'],['Blocked','1']]},
- 'Creator Success':{metrics:[['Verified creators','184','+18 this month'],['Applications','67','Awaiting review'],['Acceptance rate','38.2%','Last 90 days'],['Creator satisfaction','4.7/5','Post-support survey']],bars:[48,55,59,63,68,72,76,83,86,90,95,100],title:'Creator network growth',rank:[['Application review','93%'],['Contract completion','81%'],['Profile completion','76%'],['Response SLA','69%']],secondary:[['Nigeria','96'],['United Kingdom','41'],['Ghana','18'],['Other','29']]},
- 'Projects':{metrics:[['Active projects','12','7 in production'],['On-time rate','82%','Rolling 90 days'],['Open milestones','46','Across portfolio'],['Budget variance','+3.1%','Against approved budgets']],bars:[76,83,69,91,88,79,93,86,90,95,92,100],title:'Project delivery index',rank:[['In production','7'],['In review','3'],['At risk','2'],['Completed','36']],secondary:[['Music','8'],['Film','2'],['Podcast','1'],['Mixed media','1']]},
- 'Registry & Rights':{metrics:[['Registered assets','426','Across all formats'],['Approved assets','203','Eligible for experiences'],['Rights review','31','Awaiting clearance'],['Split integrity','100%','Validated records']],bars:[62,67,73,71,78,82,84,88,91,93,97,100],title:'Registry throughput',rank:[['Audio masters','47%'],['Compositions','23%'],['Video','14%'],['Other','16%']],secondary:[['Approved','203'],['Active','116'],['Rights review','31'],['Draft','76']]},
- 'Finance':{metrics:[['Gross revenue','$482,640','Current quarter'],['Creator pool','$144,792','Calculated PPR'],['Net payable','$132,408','After tax and fees'],['Unpaid batches','4','Awaiting approval']],bars:[58,66,70,77,73,82,88,84,92,94,97,100],title:'Revenue performance',rank:[['DSP revenue','68%'],['Direct sales','18%'],['Licensing','9%'],['Other','5%']],secondary:[['Approved','9'],['Pending','4'],['Paid','22'],['Disputed','1']]},
- 'Content & Marketing':{metrics:[['Campaign reach','1.8M','Last 30 days'],['Engagement rate','6.4%','Across channels'],['Published items','42','This quarter'],['Conversion rate','3.8%','Landing pages']],bars:[51,63,58,69,75,72,84,81,88,92,96,100],title:'Audience growth',rank:[['Instagram','82%'],['TikTok','77%'],['YouTube','64%'],['Email','49%']],secondary:[['Music','18'],['News','11'],['Product','8'],['Events','5']]},
- 'Support':{metrics:[['Open tickets','28','6 high priority'],['First response','2h 14m','Average'],['Resolution rate','91%','Within SLA'],['Satisfaction','4.6/5','Last 30 days']],bars:[82,79,85,88,84,91,89,93,95,92,98,100],title:'Support performance',rank:[['Creator support','44%'],['Account access','23%'],['Payments','18%'],['Other','15%']],secondary:[['Resolved','214'],['Open','28'],['Escalated','6'],['Waiting','11']]},
- 'Technology':{metrics:[['Platform uptime','99.96%','Last 30 days'],['Open incidents','2','No critical incidents'],['Deployments','18','This month'],['Security reviews','4','All passed']],bars:[91,93,92,96,95,97,96,98,99,98,100,100],title:'Platform reliability',rank:[['Admin OS','96%'],['Studio','89%'],['Corporate web','94%'],['Consumer platform','61%']],secondary:[['Healthy','14'],['Warning','2'],['Incident','0'],['Planned work','5']]}
+
+import { useEffect, useMemo, useState } from 'react';
+import { Download, Search } from '@/components/icons';
+
+type AnalyticsReport = {
+  id: string;
+  name?: string | null;
+  department?: string | null;
+  date_range?: string | null;
+  format?: string | null;
+  created_at?: string | null;
+  [key: string]: unknown;
 };
-type ReportFormat='CSV'|'Print / PDF';
-type ReportRecord={id:string;name:string;department:Department;format:ReportFormat;dateRange:string;createdAt:string};
-function csvCell(value:string){return `"${value.replace(/"/g,'""')}"`}
-export default function AnalyticsWorkspace(){
- const [department,setDepartment]=useState<Department>('Company overview');
- const [reportOpen,setReportOpen]=useState(false);
- const [reportName,setReportName]=useState('');
- const [format,setFormat]=useState<ReportFormat>('CSV');
- const [dateRange,setDateRange]=useState('Current quarter');
- const [includeCharts,setIncludeCharts]=useState(true);
- const [reports,setReports]=useState<ReportRecord[]>([]);
- const [reportMessage,setReportMessage]=useState('');
- const d=useMemo(()=>data[department],[department]);
- useEffect(()=>{try{setReports(JSON.parse(localStorage.getItem('plekxa:analytics-reports')||'[]'))}catch{setReports([])}},[]);
- function openReport(){setReportName(`${department} report`);setReportMessage('');setReportOpen(true)}
- async function saveRecord(record:ReportRecord){
-  const next=[record,...reports].slice(0,20);setReports(next);localStorage.setItem('plekxa:analytics-reports',JSON.stringify(next));
-  try{await fetch('/api/analytics/reports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(record)})}catch{}
- }
- async function generateReport(e:React.FormEvent){
-  e.preventDefault();
-  const record:ReportRecord={id:crypto.randomUUID(),name:reportName.trim()||`${department} report`,department,format,dateRange,createdAt:new Date().toISOString()};
-  await saveRecord(record);
-  if(format==='CSV'){
-   const rows=[['Plekxa Enterprise OS Analytics Report',''],['Report name',record.name],['Department',department],['Date range',dateRange],['Created',new Date(record.createdAt).toLocaleString()],[],['Metric','Value','Context'],...d.metrics,[''],['Performance breakdown','Value'],...d.rank,[''],['Operational snapshot','Value'],...d.secondary];
-   const csv=rows.map(row=>row.map(value=>csvCell(String(value??''))).join(',')).join('\r\n');
-   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${record.name.replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'plekxa-report'}.csv`;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);setReportMessage('CSV report downloaded.');
-  }else{
-   document.body.setAttribute('data-print-report','true');setReportOpen(false);window.setTimeout(()=>{window.print();document.body.removeAttribute('data-print-report')},100);
+
+const departments = [
+  'Executive overview',
+  'Finance',
+  'Marketing',
+  'Creator operations',
+  'Projects',
+  'Content',
+  'Experiences',
+  'Support',
+  'People',
+];
+
+const dateRanges = [
+  'All periods',
+  'Last 7 days',
+  'Last 30 days',
+  'This quarter',
+  'This year',
+];
+
+function normalise(value: unknown) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replaceAll('_', ' ');
+}
+
+function displayValue(value: unknown) {
+  const text = String(value ?? '').trim();
+
+  if (!text) {
+    return '—';
   }
- }
- return <><div className="page-head"><div><div className="eyebrow">Business intelligence</div><h1 className="page-title">Analytics</h1><p className="page-copy">Select a department to see the metrics, trends and operating indicators relevant to that team.</p></div><div className="page-actions"><label className="analytics-filter"><span>Department</span><select value={department} onChange={e=>setDepartment(e.target.value as Department)}>{departments.map(x=><option key={x}>{x}</option>)}</select></label><button className="button primary" onClick={openReport}>Create report <ArrowUpRight size={15}/></button></div></div><div className="analytics-context"><strong>{department}</strong><span>Department analytics view</span></div><div className="analytics-metrics">{d.metrics.map(([name,value,note],i)=>{const Icon=[TrendingUp,Users,Music,Globe][i];return <div key={name}><span><Icon/>{name}</span><strong>{value}</strong><small>{note}</small></div>})}</div><div className="dashboard-grid"><section className="card chart-card"><div className="card-head"><div><div className="card-title">{d.title}</div><p>Indexed activity across the last 12 months.</p></div><span className="status good">Current</span></div><div className="bar-chart">{d.bars.map((v,i)=><div key={i}><b style={{height:`${v}%`}}/><span>{['A','S','O','N','D','J','F','M','A','M','J','J'][i]}</span></div>)}</div></section><section className="card"><div className="card-head"><div><div className="card-title">Department distribution</div><p>Current operating position.</p></div></div><div className="donut-wrap"><div className="donut"><span><strong>{d.rank[0][1]}</strong><small>Leading measure</small></span></div><div className="legend">{d.rank.map(([n,v])=><div key={n}><i/>{n}<strong>{v}</strong></div>)}</div></div></section></div><div className="dashboard-grid lower"><section className="card"><div className="card-head"><div><div className="card-title">Performance breakdown</div><p>Key areas within {department.toLowerCase()}.</p></div></div><div className="rank-list">{d.rank.map(([n,v])=><div key={n}><span>{n}</span><i><b style={{width:v.includes('%')?v:'70%'}}/></i><strong>{v}</strong></div>)}</div></section><section className="card"><div className="card-head"><div><div className="card-title">Operational snapshot</div><p>Current department records.</p></div></div><div className="country-list">{d.secondary.map(([n,v])=><div key={n}><span>{n}</span><strong>{v}</strong></div>)}</div></section></div>{reports.length>0&&<section className="card report-history"><div className="card-head"><div><div className="card-title">Recent reports</div><p>Reports generated from this browser are listed below.</p></div></div><div className="country-list">{reports.slice(0,8).map(r=><div key={r.id}><span><strong>{r.name}</strong><small className="table-sub">{r.department} · {r.format} · {r.dateRange}</small></span><strong>{new Date(r.createdAt).toLocaleDateString()}</strong></div>)}</div></section>}{reportOpen&&<div className="modal-backdrop" onMouseDown={e=>{if(e.currentTarget===e.target)setReportOpen(false)}}><form className="modal" onSubmit={generateReport}><div className="modal-head"><div><div className="eyebrow">Analytics report</div><h2>Create report</h2></div><button type="button" className="icon-button" onClick={()=>setReportOpen(false)}>×</button></div><div className="modal-body"><div className="form-grid"><div className="field full"><label>Report name</label><input value={reportName} onChange={e=>setReportName(e.target.value)} required/></div><div className="field"><label>Department</label><select value={department} onChange={e=>setDepartment(e.target.value as Department)}>{departments.map(x=><option key={x}>{x}</option>)}</select></div><div className="field"><label>Date range</label><select value={dateRange} onChange={e=>setDateRange(e.target.value)}><option>Current month</option><option>Current quarter</option><option>Year to date</option><option>Last 12 months</option></select></div><div className="field"><label>Format</label><select value={format} onChange={e=>setFormat(e.target.value as ReportFormat)}><option>CSV</option><option>Print / PDF</option></select></div><label className="report-check"><input type="checkbox" checked={includeCharts} onChange={e=>setIncludeCharts(e.target.checked)}/><span><strong>Include charts</strong><small>Charts are included in the printable report view.</small></span></label></div>{reportMessage&&<div className="notice">{reportMessage}</div>}</div><div className="modal-actions"><button type="button" className="button" onClick={()=>setReportOpen(false)}>Cancel</button><button className="button primary">Generate report</button></div></form></div>}</>
+
+  return text.replaceAll('_', ' ').replace(/\b\w/g, character =>
+    character.toUpperCase(),
+  );
+}
+
+export default function AnalyticsWorkspace() {
+  const [reports, setReports] = useState<AnalyticsReport[]>([]);
+  const [department, setDepartment] = useState('Executive overview');
+  const [dateRange, setDateRange] = useState('All periods');
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  async function loadReports() {
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/live/analytics', {
+        cache: 'no-store',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Could not load analytics reports.');
+      }
+
+      setReports(Array.isArray(result.records) ? result.records : []);
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : 'Could not load analytics reports.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadReports();
+  }, []);
+
+  const departmentReports = useMemo(() => {
+    const selectedDepartment = normalise(department);
+
+    return reports.filter(report => {
+      if (department === 'Executive overview') {
+        return true;
+      }
+
+      const reportDepartment = normalise(report.department);
+
+      if (department === 'Creator operations') {
+        return (
+          reportDepartment.includes('creator') ||
+          reportDepartment.includes('creator operations')
+        );
+      }
+
+      if (department === 'People') {
+        return (
+          reportDepartment.includes('people') ||
+          reportDepartment.includes('human resources') ||
+          reportDepartment.includes('hr')
+        );
+      }
+
+      return reportDepartment.includes(selectedDepartment);
+    });
+  }, [reports, department]);
+
+  const visibleReports = useMemo(() => {
+    const searchTerm = normalise(query);
+
+    return departmentReports.filter(report => {
+      const matchesSearch =
+        !searchTerm ||
+        Object.values(report)
+          .map(value => normalise(value))
+          .join(' ')
+          .includes(searchTerm);
+
+      const matchesDateRange =
+        dateRange === 'All periods' ||
+        normalise(report.date_range).includes(normalise(dateRange));
+
+      return matchesSearch && matchesDateRange;
+    });
+  }, [departmentReports, query, dateRange]);
+
+  const departmentCounts = useMemo(() => {
+    return departments.reduce<Record<string, number>>((counts, item) => {
+      if (item === 'Executive overview') {
+        counts[item] = reports.length;
+        return counts;
+      }
+
+      const selected = normalise(item);
+
+      counts[item] = reports.filter(report => {
+        const reportDepartment = normalise(report.department);
+
+        if (item === 'Creator operations') {
+          return reportDepartment.includes('creator');
+        }
+
+        if (item === 'People') {
+          return (
+            reportDepartment.includes('people') ||
+            reportDepartment.includes('human resources') ||
+            reportDepartment === 'hr'
+          );
+        }
+
+        return reportDepartment.includes(selected);
+      }).length;
+
+      return counts;
+    }, {});
+  }, [reports]);
+
+  function exportCsv() {
+    const headers = [
+      'Report',
+      'Department',
+      'Date range',
+      'Format',
+      'Created',
+    ];
+
+    const rows = visibleReports.map(report => [
+      report.name ?? '',
+      report.department ?? '',
+      report.date_range ?? '',
+      report.format ?? '',
+      report.created_at ?? '',
+    ]);
+
+    const csv = [headers, ...rows]
+      .map(row =>
+        row
+          .map(value => `"${String(value).replaceAll('"', '""')}"`)
+          .join(','),
+      )
+      .join('\n');
+
+    const url = URL.createObjectURL(
+      new Blob([csv], {
+        type: 'text/csv;charset=utf-8',
+      }),
+    );
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `plekxa-${normalise(department).replaceAll(' ', '-')}-analytics.csv`;
+    link.click();
+
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <div className="eyebrow">Intelligence</div>
+          <h1 className="page-title">Analytics</h1>
+
+          <p className="page-copy">
+            Review reports and operational intelligence across Plekxa.
+          </p>
+        </div>
+
+        <div className="head-actions">
+          <button
+            type="button"
+            className="button secondary"
+            onClick={exportCsv}
+            disabled={visibleReports.length === 0}
+          >
+            <Download size={15} />
+            Export
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="integration-banner pending">
+          <div>
+            <strong>Analytics error</strong>
+            <span>{error}</span>
+          </div>
+        </div>
+      )}
+
+      <div className="metric-grid">
+        <article className="metric">
+          <span>Total reports</span>
+          <strong>{reports.length}</strong>
+        </article>
+
+        <article className="metric">
+          <span>Selected area</span>
+          <strong>{departmentCounts[department] ?? 0}</strong>
+        </article>
+
+        <article className="metric">
+          <span>Visible reports</span>
+          <strong>{visibleReports.length}</strong>
+        </article>
+
+        <article className="metric">
+          <span>Departments</span>
+          <strong>
+            {
+              new Set(
+                reports
+                  .map(report => normalise(report.department))
+                  .filter(Boolean),
+              ).size
+            }
+          </strong>
+        </article>
+      </div>
+
+      <div className="workspace-card">
+        <div className="module-toolbar">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '12px',
+              width: '100%',
+            }}
+          >
+            <label
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                minWidth: '220px',
+              }}
+            >
+              <span style={{ fontSize: '12px', fontWeight: 600 }}>
+                Analytics area
+              </span>
+
+              <select
+                value={department}
+                onChange={event => setDepartment(event.target.value)}
+              >
+                {departments.map(item => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                minWidth: '180px',
+              }}
+            >
+              <span style={{ fontSize: '12px', fontWeight: 600 }}>
+                Date range
+              </span>
+
+              <select
+                value={dateRange}
+                onChange={event => setDateRange(event.target.value)}
+              >
+                {dateRanges.map(item => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div
+              className="table-search"
+              style={{
+                alignSelf: 'flex-end',
+                flex: '1 1 240px',
+              }}
+            >
+              <Search size={15} />
+
+              <input
+                value={query}
+                onChange={event => setQuery(event.target.value)}
+                placeholder="Search reports…"
+              />
+            </div>
+
+            <button
+              type="button"
+              className="button secondary"
+              style={{ alignSelf: 'flex-end' }}
+              onClick={() => void loadReports()}
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div
+          style={{
+            padding: '20px 24px 4px',
+          }}
+        >
+          <div className="eyebrow">{department}</div>
+
+          <h2
+            style={{
+              margin: '6px 0 4px',
+              fontSize: '22px',
+            }}
+          >
+            {department} analytics
+          </h2>
+
+          <p
+            style={{
+              margin: 0,
+              opacity: 0.7,
+            }}
+          >
+            {department === 'Executive overview'
+              ? 'Reports from every part of the company.'
+              : `Reports assigned to ${department}.`}
+          </p>
+        </div>
+
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Report</th>
+                <th>Department</th>
+                <th>Date range</th>
+                <th>Format</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={5}>Loading analytics reports…</td>
+                </tr>
+              ) : visibleReports.length === 0 ? (
+                <tr>
+                  <td colSpan={5}>
+                    No reports are available for this analytics area.
+                  </td>
+                </tr>
+              ) : (
+                visibleReports.map(report => (
+                  <tr key={report.id}>
+                    <td>
+                      <strong>{displayValue(report.name)}</strong>
+                    </td>
+
+                    <td>{displayValue(report.department)}</td>
+                    <td>{displayValue(report.date_range)}</td>
+                    <td>{displayValue(report.format)}</td>
+
+                    <td>
+                      {report.created_at
+                        ? new Date(report.created_at).toLocaleDateString(
+                            'en-GB',
+                          )
+                        : '—'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
 }

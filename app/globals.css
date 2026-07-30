@@ -55,3 +55,7 @@
 /* v3.2 targeted registry and experience controls */
 .picker-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;border-bottom:1px solid var(--line)}
 .picker-row:last-child{border-bottom:0}.field.full{grid-column:1/-1}.record-drawer.wide{width:min(980px,96vw)}
+
+/* v3.2.2 optional unified uploads and metric spacing */
+.metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:24px}.metric-grid .metric{display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-height:112px}.metric-grid .metric-label{display:block;color:var(--muted);font-size:13px}.metric-grid .metric-value{display:block;font-size:29px;line-height:1;font-weight:750;letter-spacing:-.04em;margin:4px 0 0}.metric-grid .metric small{display:block;color:var(--muted);font-size:11px}.attention-list strong{display:flex;align-items:baseline;gap:8px}.attention-count{font-size:19px;line-height:1}.asset-upload-box{padding:4px 16px 12px;margin-bottom:12px}.uploaded-files-list{margin-top:12px}.empty-file-note{padding:14px;margin:0;color:var(--muted)}
+@media(max-width:900px){.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.metric-grid{grid-template-columns:1fr}}

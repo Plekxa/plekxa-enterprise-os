@@ -3,8 +3,20 @@
 import Image from 'next/image';
 import {useEffect,useState} from 'react';
 import {useRouter} from 'next/navigation';
-import type {AuthChangeEvent,Session} from '@supabase/supabase-js';
 import {createClient} from '@/lib/supabase/client';
+
+function inviteParams(){
+ const query=new URLSearchParams(window.location.search);
+ const hash=new URLSearchParams(window.location.hash.replace(/^#/,''));
+ return {
+  code:query.get('code'),
+  tokenHash:query.get('token_hash'),
+  type:query.get('type'),
+  accessToken:hash.get('access_token'),
+  refreshToken:hash.get('refresh_token'),
+  hashType:hash.get('type'),
+ };
+}
 
 export default function AcceptInvitePage(){
  const router=useRouter();
@@ -15,31 +27,56 @@ export default function AcceptInvitePage(){
  const [busy,setBusy]=useState(false);
 
  useEffect(()=>{
-  const supabase=createClient();
-  if(!supabase){setMessage('Supabase is not configured for this deployment.');return}
-  let mounted=true;
+  let cancelled=false;
   const verify=async()=>{
-   const code=new URLSearchParams(window.location.search).get('code');
-   if(code){
-    const {error:exchangeError}=await supabase.auth.exchangeCodeForSession(code);
-    if(exchangeError&&mounted){setMessage(exchangeError.message);return}
-    window.history.replaceState({},document.title,window.location.pathname);
+   const supabase=createClient();
+   if(!supabase){setMessage('Supabase is not configured for this deployment.');return}
+   const params=inviteParams();
+   const hasInvite=Boolean(params.code||params.tokenHash||(params.accessToken&&params.refreshToken));
+   if(!hasInvite){
+    await supabase.auth.signOut();
+    if(!cancelled)setMessage('This invitation link is invalid, expired, or has already been used. Ask an administrator to send a new invitation.');
+    return;
    }
+
+   // An administrator may already be signed in in this browser. Clear that session
+   // before accepting the invitation so the invited employee can never inherit it.
+   await supabase.auth.signOut();
+
+   let error:Error|null=null;
+   if(params.code){
+    const result=await supabase.auth.exchangeCodeForSession(params.code);
+    error=result.error;
+   }else if(params.tokenHash){
+    const result=await supabase.auth.verifyOtp({
+     token_hash:params.tokenHash,
+     type:(params.type==='recovery'?'recovery':'invite'),
+    });
+    error=result.error;
+   }else if(params.accessToken&&params.refreshToken){
+    const result=await supabase.auth.setSession({access_token:params.accessToken,refresh_token:params.refreshToken});
+    error=result.error;
+   }
+
+   if(error){
+    if(!cancelled)setMessage(error.message);
+    return;
+   }
+
    const {data:{session}}=await supabase.auth.getSession();
-   if(session&&mounted){setReady(true);setMessage('Invitation verified. Create a password to activate your account.');return}
-   const {data:{subscription}}=supabase.auth.onAuthStateChange((_event:AuthChangeEvent,nextSession:Session|null)=>{
-    if(nextSession&&mounted){setReady(true);setMessage('Invitation verified. Create a password to activate your account.')}
-   });
-   window.setTimeout(async()=>{
-    if(!mounted)return;
-    const {data:{session:laterSession}}=await supabase.auth.getSession();
-    if(!laterSession){setMessage('This invitation link is invalid, expired, or has already been used. Ask an administrator to send a new invitation.')}
-   },2500);
-   return()=>subscription.unsubscribe();
+   if(!session){
+    if(!cancelled)setMessage('The invitation session could not be created. Ask an administrator to resend the invitation.');
+    return;
+   }
+
+   window.history.replaceState({},document.title,window.location.pathname);
+   if(!cancelled){
+    setReady(true);
+    setMessage('Invitation verified. Create a password to activate your account.');
+   }
   };
-  let cleanup:(()=>void)|undefined;
-  verify().then(fn=>{cleanup=fn});
-  return()=>{mounted=false;cleanup?.()};
+  verify();
+  return()=>{cancelled=true};
  },[]);
 
  async function activate(e:React.FormEvent){
@@ -50,7 +87,7 @@ export default function AcceptInvitePage(){
   if(!supabase){setMessage('Supabase is not configured for this deployment.');return}
   setBusy(true);setMessage('Activating your account…');
   const {data:{session}}=await supabase.auth.getSession();
-  if(!session){setBusy(false);setReady(false);setMessage('Your invitation session has expired. Ask an administrator to send a new invitation.');return}
+  if(!session){setBusy(false);setReady(false);setMessage('Your invitation session has expired. Ask an administrator to resend the invitation.');return}
   const {error:updateError}=await supabase.auth.updateUser({password});
   if(updateError){setBusy(false);setMessage(updateError.message);return}
   const response=await fetch('/api/auth/accept-invite',{method:'POST',headers:{Authorization:`Bearer ${session.access_token}`}});

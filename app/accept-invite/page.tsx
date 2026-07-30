@@ -19,6 +19,12 @@ export default function AcceptInvitePage(){
   if(!supabase){setMessage('Supabase is not configured for this deployment.');return}
   let mounted=true;
   const verify=async()=>{
+   const code=new URLSearchParams(window.location.search).get('code');
+   if(code){
+    const {error:exchangeError}=await supabase.auth.exchangeCodeForSession(code);
+    if(exchangeError&&mounted){setMessage(exchangeError.message);return}
+    window.history.replaceState({},document.title,window.location.pathname);
+   }
    const {data:{session}}=await supabase.auth.getSession();
    if(session&&mounted){setReady(true);setMessage('Invitation verified. Create a password to activate your account.');return}
    const {data:{subscription}}=supabase.auth.onAuthStateChange((_event:AuthChangeEvent,nextSession:Session|null)=>{

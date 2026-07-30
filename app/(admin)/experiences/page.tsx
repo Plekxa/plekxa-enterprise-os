@@ -1,3 +1,2 @@
-import LiveModuleWorkspace from '@/components/LiveModuleWorkspace';
-import {liveModules} from '@/lib/live-modules';
-export default function Page(){return <LiveModuleWorkspace config={liveModules.experiences}/>}
+import ExperienceWorkspace from '@/components/ExperienceWorkspace';
+export default function Page(){return <ExperienceWorkspace/>}

@@ -135,15 +135,43 @@ export async function GET() {
       }
     }
 
+    const milestoneResult = projectIds.length
+      ? await s.from('project_milestones').select('*').in('project_id', projectIds).order('position', { ascending: true })
+      : { data: [], error: null };
+    if (milestoneResult.error) throw milestoneResult.error;
+    const deliverableResult = projectIds.length
+      ? await s.from('project_deliverables').select('*').in('project_id', projectIds).order('created_at', { ascending: true })
+      : { data: [], error: null };
+    if (deliverableResult.error) throw deliverableResult.error;
+    const deliverableIds = (deliverableResult.data ?? []).map((x) => x.id);
+    const fileResult = deliverableIds.length
+      ? await s.from('project_files').select('*').in('deliverable_id', deliverableIds).order('created_at', { ascending: false })
+      : { data: [], error: null };
+    if (fileResult.error) throw fileResult.error;
+
     return NextResponse.json({
-      applications: rows.map((application) => ({
-        ...application,
-        project: projectMap.get(String(application.project_id)) ?? null,
-        creator: creatorMap.get(String(application.creator_id)) ?? creatorMap.get(String(application.creator_user_id)) ?? {
-          legal_name: application.applicant_name || null,
-          email: application.applicant_email || null,
-        },
-      })),
+      applications: rows.map((application) => {
+        const projectId = String(application.project_id || '');
+        const creatorId = String(application.creator_id || '');
+        const creatorUserId = String(application.creator_user_id || '');
+        const milestones = (milestoneResult.data ?? []).filter((x) => String(x.project_id) === projectId);
+        const deliverables = (deliverableResult.data ?? []).filter((x) => {
+          if (String(x.project_id) !== projectId) return false;
+          if (x.assignee_creator_id && creatorId) return String(x.assignee_creator_id) === creatorId;
+          if (x.assignee_user_id && creatorUserId) return String(x.assignee_user_id) === creatorUserId;
+          return true;
+        }).map((d) => ({...d, files:(fileResult.data ?? []).filter((f) => String(f.deliverable_id) === String(d.id))}));
+        return {
+          ...application,
+          project: projectMap.get(projectId) ?? null,
+          creator: creatorMap.get(creatorId) ?? creatorMap.get(creatorUserId) ?? {
+            legal_name: application.applicant_name || null,
+            email: application.applicant_email || null,
+          },
+          milestones,
+          deliverables,
+        };
+      }),
     });
   } catch (error) {
     console.error('Admin applications GET error:', error);

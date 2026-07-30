@@ -51,3 +51,7 @@
  .sidebar .nav-link span{display:inline}
  .role-preview{margin-bottom:8px}
 }
+
+/* v3.2 targeted registry and experience controls */
+.picker-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.picker-row:last-child{border-bottom:0}.field.full{grid-column:1/-1}.record-drawer.wide{width:min(980px,96vw)}

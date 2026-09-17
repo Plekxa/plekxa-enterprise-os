@@ -1,2 +1,1 @@
-import ExperienceWorkspace from '@/components/ExperienceWorkspace';
-export default function Page(){return <ExperienceWorkspace/>}
+import {redirect} from 'next/navigation'; export default function Page(){redirect('/collections')}

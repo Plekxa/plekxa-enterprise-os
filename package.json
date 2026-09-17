@@ -14,7 +14,10 @@
     "next": "16.2.11",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "nodemailer": "^7.0.3"
+    "nodemailer": "^7.0.3",
+    "@aws-sdk/client-s3": "^3.883.0",
+    "@aws-sdk/s3-request-presigner": "^3.883.0",
+    "pdf-lib": "^1.17.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

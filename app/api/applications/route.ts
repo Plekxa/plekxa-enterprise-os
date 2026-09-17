@@ -203,6 +203,16 @@ export async function PATCH(request: Request) {
         ? await s.from('projects').select('*').eq('id', data.project_id).maybeSingle()
         : { data: null };
       const projectTitle = String(project?.title || project?.name || 'your selected project');
+      if (status === 'accepted' && data.creator_user_id && data.project_id) {
+        const commissionCode = `COM-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+        const { error: workspaceError } = await s.from('creator_project_workspaces').upsert({
+          application_id: data.id, project_id: data.project_id, creator_id: data.creator_user_id,
+          enterprise_creator_id: data.creator_id || null, title: projectTitle, status: 'active', commission_code: commissionCode,
+          pay_amount: project?.pay_amount ?? project?.budget ?? null, pay_currency: project?.pay_currency || project?.currency || 'GBP',
+          payment_schedule: project?.payment_schedule || []
+        }, { onConflict: 'application_id' });
+        if (workspaceError) throw workspaceError;
+      }
       delivery = await notifyDecision(s, data, status, projectTitle, String(body.rejectionReason || '') || null);
     }
 

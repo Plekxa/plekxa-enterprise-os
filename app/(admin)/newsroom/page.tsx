@@ -1,3 +1,1 @@
-import LiveModuleWorkspace from '@/components/LiveModuleWorkspace';
-import {liveModules} from '@/lib/live-modules';
-export default function Page(){return <LiveModuleWorkspace config={liveModules.newsroom}/>}
+import NewsroomWorkspace from "@/components/NewsroomWorkspace"; export default function Page(){return <NewsroomWorkspace/>}

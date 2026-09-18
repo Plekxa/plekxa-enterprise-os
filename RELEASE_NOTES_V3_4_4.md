@@ -5,3 +5,8 @@
 - Records email delivery status, recipient, timestamp and failure reason.
 - Idempotent delivery: already-sent certificates are not re-sent by assignment retries.
 - Legacy contributors without a linked creator email are marked `no_recipient` rather than silently failing.
+
+## v3.5.3 — Deliverable revision workflow
+- Revision instructions are required before returning a deliverable.
+- Revision requests reopen the creator deliverable for editing/resubmission.
+- Creator notification type aligned with Studio revision_requested handling.

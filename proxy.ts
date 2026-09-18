@@ -9,7 +9,7 @@ export async function proxy(request: NextRequest) {
   const url=process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if(!url||!key)return NextResponse.json({error:'Authentication is not configured.'},{status:503});
-  const supabase=createServerClient(url,key,{cookies:{getAll:()=>request.cookies.getAll(),setAll:(items)=>{items.forEach(({name,value})=>request.cookies.set(name,value));response=NextResponse.next({request});items.forEach(({name,value,options})=>response.cookies.set(name,value,options));}}});
+  const supabase=createServerClient(url,key,{cookies:{getAll:()=>request.cookies.getAll(),setAll:(items: any[])=>{items.forEach(({name,value})=>request.cookies.set(name,value));response=NextResponse.next({request});items.forEach(({name,value,options})=>response.cookies.set(name,value,options));}}});
   const {data:{user}}=await supabase.auth.getUser();
   if(!user){
     if(path.startsWith('/api/'))return NextResponse.json({error:'Not authenticated.'},{status:401});

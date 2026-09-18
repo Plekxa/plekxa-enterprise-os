@@ -1,5 +1,6 @@
 import {NextResponse} from 'next/server';
 import {createClient} from '@supabase/supabase-js';
+import {deliverCertificatesForAsset} from '@/lib/certificate-delivery';
 function db(){const u=process.env.NEXT_PUBLIC_SUPABASE_URL,k=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!u||!k)throw new Error('Supabase service credentials are not configured.');return createClient(u,k,{auth:{persistSession:false}})}
 
 const VALID=new Set(['flagship','supporting','niche']);
@@ -15,7 +16,8 @@ export async function POST(r:Request){
    const {data:indexId,error}=await s.rpc('plekxa_assign_asset_to_index',{p_asset_id:assetId,p_role:role});
    if(error){results.push({asset_id:assetId,ok:false,error:error.message});continue}
    const {error:ce}=await s.rpc('plekxa_issue_index_certificates',{p_asset_id:assetId});
-   results.push({asset_id:assetId,ok:true,index_id:indexId,certificate_warning:ce?.message||null});
+   const emailResults=ce?[]:await deliverCertificatesForAsset(s,assetId);
+   results.push({asset_id:assetId,ok:true,index_id:indexId,certificate_warning:ce?.message||null,certificate_delivery:emailResults});
   }
   const failed=results.filter(x=>!x.ok);
   return NextResponse.json({ok:failed.length===0,results},{status:failed.length===assignments.length?400:200});

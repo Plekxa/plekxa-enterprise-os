@@ -5,6 +5,7 @@ type MailInput = {
   subject: string;
   text: string;
   html?: string;
+  attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>;
 };
 
 export async function sendMail(input: MailInput): Promise<{ sent: boolean; reason?: string }> {
@@ -31,6 +32,7 @@ export async function sendMail(input: MailInput): Promise<{ sent: boolean; reaso
     subject: input.subject,
     text: input.text,
     html: input.html,
+    attachments: input.attachments,
   });
 
   return { sent: true };

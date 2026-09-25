@@ -83,3 +83,17 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: msg(error) }, { status: 500 });
   }
 }
+
+export async function POST(request: Request) {
+  try {
+    const s=admin(); if(!s)return NextResponse.json({error:'Supabase service credentials are not configured.'},{status:503});
+    const b=await request.json(); const proposalId=String(b.proposal_id||'');
+    if(!proposalId||!b.genre||!b.mood||!b.asset_type)return NextResponse.json({error:'Proposal, genre, mood and Asset format are required.'},{status:400});
+    const {data:proposal,error:pe}=await s.from('proposals').select('*').eq('id',proposalId).single(); if(pe)throw pe;
+    if(proposal.status!=='approved')return NextResponse.json({error:'Approve the proposal before creating its Project.'},{status:400});
+    const {data:existing}=await s.from('projects').select('*').eq('source_proposal_id',proposalId).maybeSingle(); if(existing)return NextResponse.json({project:existing,existing:true});
+    const {data:p,error}=await s.from('projects').insert({title:proposal.title,name:proposal.title,summary:proposal.summary,description:proposal.description,project_type:'creator_proposal',source_proposal_id:proposal.id,asset_type:b.asset_type,genre:b.genre,mood:b.mood,pay_amount:Number(b.pay_amount||0),pay_currency:b.pay_currency||'GBP',application_opens_at:b.application_opens_at||null,application_closes_at:b.application_closes_at||null,commission_slots:Number(b.commission_slots||1),status:b.status||'planning'}).select('*').single(); if(error)throw error;
+    const {data:rr,error:re}=await s.rpc('plekxa_reserve_project_asset',{p_project_id:p.id}); if(re){await s.from('projects').delete().eq('id',p.id);throw re}
+    return NextResponse.json({project:p,reservation:Array.isArray(rr)?rr[0]:rr},{status:201});
+  } catch(error){return NextResponse.json({error:msg(error)},{status:500})}
+}

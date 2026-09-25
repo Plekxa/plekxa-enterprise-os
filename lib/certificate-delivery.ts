@@ -3,7 +3,7 @@ import { sendMail } from '@/lib/mail';
 
 export async function buildCertificatePdf(s:any,c:any){
  const [{data:a},{data:i}]=await Promise.all([
-  s.from('asset_registry').select('title,internal_identifier,role').eq('id',c.asset_id).single(),
+  s.from('asset_registry').select('title,internal_identifier,genre,mood').eq('id',c.asset_id).single(),
   s.from('plekxa_indexes').select('index_code').eq('id',c.index_id).single()
  ]);
  const pdf=await PDFDocument.create(); const page=pdf.addPage([595.28,841.89]);
@@ -11,7 +11,7 @@ export async function buildCertificatePdf(s:any,c:any){
  page.drawRectangle({x:28,y:28,width:539,height:786,borderWidth:2,borderColor:rgb(.08,.08,.08)});
  page.drawText('PLEKXA',{x:55,y:755,size:25,font:bold}); page.drawText('INDEX INCLUSION CERTIFICATE',{x:55,y:710,size:18,font:bold});
  page.drawText('Formal record of Asset inclusion and economic participation',{x:55,y:684,size:10,font:regular});
- const rows=[['Certificate ID',c.certificate_code],['Asset',`${a?.internal_identifier||''} — ${a?.title||''}`],['Index',i?.index_code||''],['Classification',String(a?.role||'').toUpperCase()],['Asset Index Participation',`${Number(c.asset_index_percentage||0).toFixed(2)}%`],['Contributor',c.creator_name],['Contributor Role',c.creator_role||'—'],['Contributor Asset Participation',`${Number(c.contributor_asset_percentage||0).toFixed(2)}%`],['Effective Index Participation',`${Number(c.effective_index_percentage||c.participation_percentage||0).toFixed(4)}%`],['Effective Inclusion Date',c.effective_inclusion_date||''],['Status',String(c.status||'issued').toUpperCase()]];
+ const rows=[['Certificate ID',c.certificate_code],['Asset',`${a?.internal_identifier||''} — ${a?.title||''}`],['Index',i?.index_code||''],['Genre / Mood',`${a?.genre||'—'} / ${a?.mood||'—'}`],['Asset Index Participation',`${Number(c.asset_index_percentage||0).toFixed(2)}%`],['Contributor',c.creator_name],['Contributor Role',c.creator_role||'—'],['Contributor Asset Participation',`${Number(c.contributor_asset_percentage||0).toFixed(2)}%`],['Effective Index Participation',`${Number(c.effective_index_percentage||c.participation_percentage||0).toFixed(4)}%`],['Effective Inclusion Date',c.effective_inclusion_date||''],['Status',String(c.status||'issued').toUpperCase()]];
  let y=625; for(const [k,v] of rows){page.drawText(k,{x:55,y,size:9,font:bold});page.drawText(String(v),{x:230,y,size:10,font:regular});page.drawLine({start:{x:55,y:y-9},end:{x:540,y:y-9},thickness:.5,color:rgb(.8,.8,.8)});y-=39}
  page.drawText('Issued by Plekxa Group Limited',{x:55,y:115,size:10,font:bold}); page.drawText('This certificate records Index inclusion and participation. Detailed rights remain governed by the applicable contributor agreement.',{x:55,y:88,size:7.5,font:regular,maxWidth:480});
  return {bytes:Buffer.from(await pdf.save()),asset:a,index:i};

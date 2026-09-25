@@ -212,6 +212,11 @@ export async function PATCH(request: Request) {
           payment_schedule: project?.payment_schedule || []
         }, { onConflict: 'application_id' });
         if (workspaceError) throw workspaceError;
+        if (project?.reserved_asset_id && data.creator_id) {
+          const {data:cp}=await s.from('creator_profiles').select('legal_name,stage_name,email').eq('id',data.creator_id).maybeSingle();
+          const {data:existingContributor}=await s.from('asset_contributors').select('id').eq('asset_id',project.reserved_asset_id).eq('creator_id',data.creator_id).maybeSingle();
+          if(!existingContributor) await s.from('asset_contributors').insert({asset_id:project.reserved_asset_id,creator_id:data.creator_id,contributor_name:cp?.legal_name||cp?.stage_name||cp?.email||data.applicant_name||'Accepted creator',role_name:'Contributor',master_share:0,publishing_share:0,allocation_status:'planned'});
+        }
       }
       delivery = await notifyDecision(s, data, status, projectTitle, String(body.rejectionReason || '') || null);
     }

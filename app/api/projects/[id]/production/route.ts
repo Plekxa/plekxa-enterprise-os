@@ -4,15 +4,17 @@ import {enterpriseContext,audit} from '@/lib/enterprise-auth';
 function fail(e:any){return NextResponse.json({error:e?.message||'Project production request failed.'},{status:e?.status||500})}
 async function creator(s:any,id:string){const {data,error}=await s.from('creator_profiles').select('id,user_id,legal_name,stage_name,email,display_name').eq('id',id).single();if(error)throw error;return data}
 async function project(s:any,id:string){const {data,error}=await s.from('projects').select('*').eq('id',id).single();if(error)throw error;return data}
-export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){try{const {admin:s}=await enterpriseContext();const {id}=await params;const p=await project(s,id);if(!p.reserved_asset_id)throw new Error('This Project has no reserved Asset.');const [assetQ,contribQ,workspaceQ,appsQ,creatorsQ]=await Promise.all([
+export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){try{const {admin:s}=await enterpriseContext();const {id}=await params;const p=await project(s,id);if(!p.reserved_asset_id)throw new Error('This Project has no reserved Asset.');const [assetQ,contribQ,workspaceQ,appsQ,creatorsQ,milestonesQ,deliverablesQ]=await Promise.all([
  s.from('asset_registry').select('*').eq('id',p.reserved_asset_id).single(),
  s.from('asset_contributors').select('*').eq('asset_id',p.reserved_asset_id).neq('allocation_status','removed').order('created_at'),
  s.from('creator_project_workspaces').select('*').eq('project_id',id).order('created_at'),
  s.from('creator_applications').select('*').eq('project_id',id).order('applied_at',{ascending:false}),
- s.from('creator_profiles').select('id,user_id,legal_name,stage_name,email,display_name').order('created_at',{ascending:false})
+ s.from('creator_profiles').select('id,user_id,legal_name,stage_name,email,display_name').order('created_at',{ascending:false}),
+ s.from('project_milestones').select('*').eq('project_id',id).order('position'),
+ s.from('project_deliverables').select('*').eq('project_id',id).order('created_at')
 ]);
- for(const q of [assetQ,contribQ,workspaceQ,appsQ,creatorsQ])if(q.error)throw q.error;
- return NextResponse.json({project:p,asset:assetQ.data,contributors:contribQ.data||[],workspaces:workspaceQ.data||[],applications:appsQ.data||[],creators:creatorsQ.data||[]});
+ for(const q of [assetQ,contribQ,workspaceQ,appsQ,creatorsQ,milestonesQ,deliverablesQ])if(q.error)throw q.error;
+ return NextResponse.json({project:p,asset:assetQ.data,contributors:contribQ.data||[],workspaces:workspaceQ.data||[],applications:appsQ.data||[],creators:creatorsQ.data||[],milestones:milestonesQ.data||[],deliverables:deliverablesQ.data||[]});
 }catch(e){return fail(e)}}
 
 export async function POST(r:Request,{params}:{params:Promise<{id:string}>}){try{const {admin:s,user,staff}=await enterpriseContext();const {id}=await params;const b=await r.json();const action=String(b.action||'');const p=await project(s,id);if(!p.reserved_asset_id)throw new Error('Reserve the Project Asset before commissioning creators.');
@@ -32,6 +34,18 @@ export async function POST(r:Request,{params}:{params:Promise<{id:string}>}){try
   const {data:existing}=await s.from('asset_contributors').select('id').eq('asset_id',p.reserved_asset_id).eq('creator_id',cp.id).maybeSingle();const row={asset_id:p.reserved_asset_id,creator_id:cp.id,contributor_name:cp.legal_name||cp.stage_name||cp.display_name||cp.email||'Contributor',role_name:role,master_share:share,publishing_share:0,allocation_status:'planned',source_workspace_id:w.id,updated_at:new Date().toISOString()};if(existing)await s.from('asset_contributors').update(row).eq('id',existing.id);else{const q=await s.from('asset_contributors').insert(row);if(q.error)throw q.error;}
   const {error:ve}=await s.rpc('plekxa_validate_asset_ownership',{p_asset_id:p.reserved_asset_id});if(ve){await s.from('creator_project_workspaces').delete().eq('id',w.id);throw ve;}
   await audit(s,user,staff,'creator_commissioned','project',id,{creator_id:cp.id,role,asset_id:p.reserved_asset_id,ownership_percent:share,workspace_id:w.id});return NextResponse.json({ok:true,workspace:w});
+ }
+ if(action==='add_milestone'){
+  const title=String(b.title||'').trim();if(!title)return NextResponse.json({error:'Milestone title is required.'},{status:400});
+  const {data:rows}=await s.from('project_milestones').select('position').eq('project_id',id).order('position',{ascending:false}).limit(1);
+  const q=await s.from('project_milestones').insert({project_id:id,title,description:b.description||null,due_at:b.due_at||null,status:'not_started',position:Number(rows?.[0]?.position||0)+1});if(q.error)throw q.error;
+  await audit(s,user,staff,'milestone_created','project',id,{title});return NextResponse.json({ok:true});
+ }
+ if(action==='add_deliverable'){
+  const title=String(b.title||'').trim(),workspaceId=String(b.workspace_id||'');if(!title||!workspaceId)return NextResponse.json({error:'Deliverable title and creator commission are required.'},{status:400});
+  const {data:w,error:we}=await s.from('creator_project_workspaces').select('*').eq('id',workspaceId).eq('project_id',id).single();if(we)throw we;
+  const q=await s.from('project_deliverables').insert({project_id:id,workspace_id:w.id,title,deliverable_type:b.deliverable_type||'creative',status:'not_started',review_status:'pending',due_at:b.due_at||null,approval_notes:b.instructions||null,assignee_user_id:w.creator_id||null});if(q.error)throw q.error;
+  await audit(s,user,staff,'deliverable_created','project',id,{title,workspace_id:w.id});return NextResponse.json({ok:true});
  }
  if(action==='finalize_asset'){
   const {data:total,error:te}=await s.rpc('plekxa_validate_asset_ownership',{p_asset_id:p.reserved_asset_id});if(te)throw te;if(Number(total)!==100)return NextResponse.json({error:`Contributor ownership must total exactly 100% before final approval. Current total: ${Number(total).toFixed(2)}%.`},{status:409});

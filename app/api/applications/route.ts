@@ -200,28 +200,76 @@ export async function PATCH(request: Request) {
       .single();
     if (currentError) throw currentError;
 
-    let canonicalCreatorId = currentApplication.creator_id || null;
-    if (currentApplication.creator_user_id) {
-      const { data: creatorProfile, error: creatorError } = await s
+    // Resolve a canonical creator_profiles.id without ever writing NULL into the
+    // production NOT NULL creator_applications.creator_id column. Older Studio
+    // submissions may have stored auth.users.id in creator_id, and some older
+    // rows may not have creator_user_id populated.
+    let canonicalCreatorId: string | null = null;
+    const candidateUserIds = [currentApplication.creator_user_id, currentApplication.creator_id]
+      .filter(Boolean)
+      .map(String);
+
+    // First, accept creator_id as-is only when it is already a real profile ID.
+    if (currentApplication.creator_id) {
+      const { data: directProfile, error: directError } = await s
         .from('creator_profiles')
         .select('id,user_id')
-        .eq('user_id', currentApplication.creator_user_id)
+        .eq('id', currentApplication.creator_id)
         .maybeSingle();
-      if (creatorError) throw creatorError;
-      if (creatorProfile?.id) canonicalCreatorId = creatorProfile.id;
+      if (directError) throw directError;
+      if (directProfile?.id) canonicalCreatorId = String(directProfile.id);
     }
-    if (canonicalCreatorId) {
-      const { data: validCreator } = await s
+
+    // Otherwise treat the legacy IDs as possible auth user IDs.
+    if (!canonicalCreatorId) {
+      for (const userId of candidateUserIds) {
+        const { data: creatorProfile, error: creatorError } = await s
+          .from('creator_profiles')
+          .select('id,user_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+        if (creatorError) throw creatorError;
+        if (creatorProfile?.id) {
+          canonicalCreatorId = String(creatorProfile.id);
+          break;
+        }
+      }
+    }
+
+    // Last safe recovery path for legacy rows: match the application email to
+    // the registered creator profile. Do not guess by name.
+    if (!canonicalCreatorId && currentApplication.applicant_email) {
+      const { data: emailProfile, error: emailError } = await s
         .from('creator_profiles')
-        .select('id')
-        .eq('id', canonicalCreatorId)
+        .select('id,user_id')
+        .eq('email', currentApplication.applicant_email)
         .maybeSingle();
-      if (!validCreator) canonicalCreatorId = null;
+      if (emailError) throw emailError;
+      if (emailProfile?.id) canonicalCreatorId = String(emailProfile.id);
     }
-    if (canonicalCreatorId !== currentApplication.creator_id) {
+
+    if (!canonicalCreatorId) {
+      return NextResponse.json({
+        error: 'This application is not linked to a valid Creator Profile. Ask the creator to complete their Creator Studio profile, then retry the decision.',
+      }, { status: 409 });
+    }
+
+    const identityPatch: Record<string, unknown> = {};
+    if (String(currentApplication.creator_id || '') !== canonicalCreatorId) identityPatch.creator_id = canonicalCreatorId;
+    if (!currentApplication.creator_user_id) {
+      const { data: resolvedProfile, error: resolvedError } = await s
+        .from('creator_profiles')
+        .select('user_id')
+        .eq('id', canonicalCreatorId)
+        .single();
+      if (resolvedError) throw resolvedError;
+      if (resolvedProfile?.user_id) identityPatch.creator_user_id = resolvedProfile.user_id;
+    }
+    if (Object.keys(identityPatch).length) {
+      identityPatch.updated_at = new Date().toISOString();
       const { error: identityError } = await s
         .from('creator_applications')
-        .update({ creator_id: canonicalCreatorId, updated_at: new Date().toISOString() })
+        .update(identityPatch)
         .eq('id', id);
       if (identityError) throw identityError;
     }

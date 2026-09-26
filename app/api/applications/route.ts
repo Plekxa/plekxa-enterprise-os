@@ -233,11 +233,16 @@ export async function PATCH(request: Request) {
         // application_id is protected by a partial unique index in production.
         // PostgREST's plain ON CONFLICT(application_id) cannot infer that index,
         // so explicitly update an existing workspace or insert a new one.
-        const { data: existingWorkspace, error: workspaceLookupError } = await s
+        let { data: existingWorkspace, error: workspaceLookupError } = await s
           .from('creator_project_workspaces')
           .select('id')
           .eq('application_id', data.id)
           .maybeSingle();
+        if (!existingWorkspace && !workspaceLookupError) {
+          const byCreator = await s.from('creator_project_workspaces').select('id').eq('project_id', data.project_id).eq('enterprise_creator_id', creatorProfileId).eq('commission_role','contributor').not('status','in','(removed,superseded,cancelled)').order('created_at',{ascending:true}).limit(1).maybeSingle();
+          existingWorkspace = byCreator.data;
+          workspaceLookupError = byCreator.error;
+        }
         if (workspaceLookupError) throw workspaceLookupError;
         if (existingWorkspace?.id) {
           const { error: workspaceUpdateError } = await s

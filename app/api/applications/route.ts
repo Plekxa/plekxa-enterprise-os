@@ -224,13 +224,33 @@ export async function PATCH(request: Request) {
         if (!creatorProfile?.id) throw new Error('Accepted creator does not have a Creator Profile linked to this user account.');
         const creatorProfileId = String(creatorProfile.id);
         const commissionCode = `COM-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
-        const { error: workspaceError } = await s.from('creator_project_workspaces').upsert({
+        const workspacePayload = {
           application_id: data.id, project_id: data.project_id, creator_id: creatorUserId,
-          enterprise_creator_id: creatorProfileId, title: projectTitle, status: 'active', commission_code: commissionCode,
+          enterprise_creator_id: creatorProfileId, title: projectTitle, status: 'active',
           pay_amount: project?.pay_amount ?? project?.budget ?? null, pay_currency: project?.pay_currency || project?.currency || 'GBP',
           payment_schedule: project?.payment_schedule || []
-        }, { onConflict: 'application_id' });
-        if (workspaceError) throw workspaceError;
+        };
+        // application_id is protected by a partial unique index in production.
+        // PostgREST's plain ON CONFLICT(application_id) cannot infer that index,
+        // so explicitly update an existing workspace or insert a new one.
+        const { data: existingWorkspace, error: workspaceLookupError } = await s
+          .from('creator_project_workspaces')
+          .select('id')
+          .eq('application_id', data.id)
+          .maybeSingle();
+        if (workspaceLookupError) throw workspaceLookupError;
+        if (existingWorkspace?.id) {
+          const { error: workspaceUpdateError } = await s
+            .from('creator_project_workspaces')
+            .update(workspacePayload)
+            .eq('id', existingWorkspace.id);
+          if (workspaceUpdateError) throw workspaceUpdateError;
+        } else {
+          const { error: workspaceInsertError } = await s
+            .from('creator_project_workspaces')
+            .insert({ ...workspacePayload, commission_code: commissionCode });
+          if (workspaceInsertError) throw workspaceInsertError;
+        }
         if (project?.reserved_asset_id) {
           const {data:existingContributor}=await s.from('asset_contributors').select('id').eq('asset_id',project.reserved_asset_id).eq('creator_id',creatorProfileId).maybeSingle();
           if(!existingContributor) await s.from('asset_contributors').insert({asset_id:project.reserved_asset_id,creator_id:creatorProfileId,contributor_name:creatorProfile.legal_name||creatorProfile.stage_name||creatorProfile.email||data.applicant_name||'Accepted creator',role_name:'Contributor',master_share:0,publishing_share:0,allocation_status:'planned'});

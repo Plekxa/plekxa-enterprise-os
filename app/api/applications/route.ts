@@ -253,7 +253,7 @@ export async function PATCH(request: Request) {
         }
         if (project?.reserved_asset_id) {
           const {data:existingContributor}=await s.from('asset_contributors').select('id').eq('asset_id',project.reserved_asset_id).eq('creator_id',creatorProfileId).maybeSingle();
-          if(!existingContributor) await s.from('asset_contributors').insert({asset_id:project.reserved_asset_id,creator_id:creatorProfileId,contributor_name:creatorProfile.legal_name||creatorProfile.stage_name||creatorProfile.email||data.applicant_name||'Accepted creator',role_name:'Contributor',master_share:0,publishing_share:0,allocation_status:'planned'});
+          if(!existingContributor){const {error:contributorError}=await s.from('asset_contributors').insert({asset_id:project.reserved_asset_id,creator_id:creatorProfileId,contributor_name:creatorProfile.stage_name||creatorProfile.legal_name||creatorProfile.email||data.applicant_name||'Accepted creator',role_name:'Contributor',contributor_role:'Contributor',master_share:0,ppr_split:0,publishing_share:0,allocation_status:'planned'});if(contributorError)throw contributorError;}
         }
       }
       delivery = await notifyDecision(s, data, status, projectTitle, String(body.rejectionReason || '') || null);

@@ -189,6 +189,43 @@ export async function PATCH(request: Request) {
     const allowed = ['pending', 'under_review', 'shortlisted', 'accepted', 'rejected', 'withdrawn'];
     if (!id || !allowed.includes(status)) return NextResponse.json({ error: 'A valid application and status are required.' }, { status: 400 });
 
+    // Canonicalise the application creator identity before any status update.
+    // creator_id must reference creator_profiles.id; creator_user_id references auth.users.id.
+    // Older/fallback Studio submissions could leave creator_id holding the auth user UUID,
+    // which causes downstream contract triggers to violate contracts_creator_id_fkey.
+    const { data: currentApplication, error: currentError } = await s
+      .from('creator_applications')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (currentError) throw currentError;
+
+    let canonicalCreatorId = currentApplication.creator_id || null;
+    if (currentApplication.creator_user_id) {
+      const { data: creatorProfile, error: creatorError } = await s
+        .from('creator_profiles')
+        .select('id,user_id')
+        .eq('user_id', currentApplication.creator_user_id)
+        .maybeSingle();
+      if (creatorError) throw creatorError;
+      if (creatorProfile?.id) canonicalCreatorId = creatorProfile.id;
+    }
+    if (canonicalCreatorId) {
+      const { data: validCreator } = await s
+        .from('creator_profiles')
+        .select('id')
+        .eq('id', canonicalCreatorId)
+        .maybeSingle();
+      if (!validCreator) canonicalCreatorId = null;
+    }
+    if (canonicalCreatorId !== currentApplication.creator_id) {
+      const { error: identityError } = await s
+        .from('creator_applications')
+        .update({ creator_id: canonicalCreatorId, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (identityError) throw identityError;
+    }
+
     const update: Record<string, unknown> = { status, updated_at: new Date().toISOString() };
     if (['accepted', 'rejected'].includes(status)) update.reviewed_at = new Date().toISOString();
     if (body.reviewNotes !== undefined) update.review_notes = body.reviewNotes || null;

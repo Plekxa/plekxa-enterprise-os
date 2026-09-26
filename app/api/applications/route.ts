@@ -39,11 +39,11 @@ async function notifyDecision(
   projectTitle: string,
   reason?: string | null,
 ) {
-  const userId = String(application.creator_user_id || '');
+  const userId = String(application.creator_user_id || application.creator_id || '');
   if (!userId) return { notified: false, emailed: false, reason: 'Application has no creator_user_id.' };
 
   const accepted = status === 'accepted';
-  const shortlisted = status === 'shortlisted';
+  const shortlisted = status === 'under_review';
   const title = accepted
     ? 'Your Plekxa application was accepted'
     : shortlisted
@@ -103,8 +103,8 @@ export async function GET() {
 
     const rows = applications ?? [];
     const projectIds = [...new Set(rows.map((r) => r.project_id).filter(Boolean))] as string[];
-    const creatorIds = [...new Set(rows.map((r) => r.creator_id).filter(Boolean))] as string[];
-    const userIds = [...new Set(rows.map((r) => r.creator_user_id).filter(Boolean))] as string[];
+    // Both creator_applications.creator_id and creator_user_id reference auth.users(id).
+    const userIds = [...new Set(rows.flatMap((r) => [r.creator_user_id, r.creator_id]).filter(Boolean))] as string[];
 
     const projects = projectIds.length
       ? await s.from('projects').select('*').in('id', projectIds)
@@ -112,12 +112,8 @@ export async function GET() {
     if (projects.error) throw projects.error;
 
     let creators: { data: DbRow[] | null; error: unknown } = { data: [], error: null };
-    if (creatorIds.length || userIds.length) {
-      const clauses = [
-        creatorIds.length ? `id.in.(${creatorIds.join(',')})` : '',
-        userIds.length ? `user_id.in.(${userIds.join(',')})` : '',
-      ].filter(Boolean);
-      creators = await s.from('creator_profiles').select('*').or(clauses.join(','));
+    if (userIds.length) {
+      creators = await s.from('creator_profiles').select('*').in('user_id', userIds);
       if (creators.error) throw creators.error;
     }
 
@@ -186,13 +182,12 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     const id = String(body.id || '');
     const status = String(body.status || '').toLowerCase();
-    const allowed = ['pending', 'under_review', 'shortlisted', 'accepted', 'rejected', 'withdrawn'];
+    const allowed = ['pending', 'under_review', 'accepted', 'rejected', 'withdrawn'];
     if (!id || !allowed.includes(status)) return NextResponse.json({ error: 'A valid application and status are required.' }, { status: 400 });
 
-    // Canonicalise the application creator identity before any status update.
-    // creator_id must reference creator_profiles.id; creator_user_id references auth.users.id.
-    // Older/fallback Studio submissions could leave creator_id holding the auth user UUID,
-    // which causes downstream contract triggers to violate contracts_creator_id_fkey.
+    // Application identity is auth-user based in production:
+    // creator_id -> auth.users.id and creator_user_id -> auth.users.id.
+    // Never rewrite either field to creator_profiles.id during a decision.
     const { data: currentApplication, error: currentError } = await s
       .from('creator_applications')
       .select('*')
@@ -200,78 +195,9 @@ export async function PATCH(request: Request) {
       .single();
     if (currentError) throw currentError;
 
-    // Resolve a canonical creator_profiles.id without ever writing NULL into the
-    // production NOT NULL creator_applications.creator_id column. Older Studio
-    // submissions may have stored auth.users.id in creator_id, and some older
-    // rows may not have creator_user_id populated.
-    let canonicalCreatorId: string | null = null;
-    const candidateUserIds = [currentApplication.creator_user_id, currentApplication.creator_id]
-      .filter(Boolean)
-      .map(String);
-
-    // First, accept creator_id as-is only when it is already a real profile ID.
-    if (currentApplication.creator_id) {
-      const { data: directProfile, error: directError } = await s
-        .from('creator_profiles')
-        .select('id,user_id')
-        .eq('id', currentApplication.creator_id)
-        .maybeSingle();
-      if (directError) throw directError;
-      if (directProfile?.id) canonicalCreatorId = String(directProfile.id);
-    }
-
-    // Otherwise treat the legacy IDs as possible auth user IDs.
-    if (!canonicalCreatorId) {
-      for (const userId of candidateUserIds) {
-        const { data: creatorProfile, error: creatorError } = await s
-          .from('creator_profiles')
-          .select('id,user_id')
-          .eq('user_id', userId)
-          .maybeSingle();
-        if (creatorError) throw creatorError;
-        if (creatorProfile?.id) {
-          canonicalCreatorId = String(creatorProfile.id);
-          break;
-        }
-      }
-    }
-
-    // Last safe recovery path for legacy rows: match the application email to
-    // the registered creator profile. Do not guess by name.
-    if (!canonicalCreatorId && currentApplication.applicant_email) {
-      const { data: emailProfile, error: emailError } = await s
-        .from('creator_profiles')
-        .select('id,user_id')
-        .eq('email', currentApplication.applicant_email)
-        .maybeSingle();
-      if (emailError) throw emailError;
-      if (emailProfile?.id) canonicalCreatorId = String(emailProfile.id);
-    }
-
-    if (!canonicalCreatorId) {
-      return NextResponse.json({
-        error: 'This application is not linked to a valid Creator Profile. Ask the creator to complete their Creator Studio profile, then retry the decision.',
-      }, { status: 409 });
-    }
-
-    const identityPatch: Record<string, unknown> = {};
-    if (String(currentApplication.creator_id || '') !== canonicalCreatorId) identityPatch.creator_id = canonicalCreatorId;
-    if (!currentApplication.creator_user_id) {
-      const { data: resolvedProfile, error: resolvedError } = await s
-        .from('creator_profiles')
-        .select('user_id')
-        .eq('id', canonicalCreatorId)
-        .single();
-      if (resolvedError) throw resolvedError;
-      if (resolvedProfile?.user_id) identityPatch.creator_user_id = resolvedProfile.user_id;
-    }
-    if (Object.keys(identityPatch).length) {
-      identityPatch.updated_at = new Date().toISOString();
-      const { error: identityError } = await s
-        .from('creator_applications')
-        .update(identityPatch)
-        .eq('id', id);
-      if (identityError) throw identityError;
+    const creatorUserId = String(currentApplication.creator_user_id || currentApplication.creator_id || '');
+    if (!creatorUserId) {
+      return NextResponse.json({ error: 'This application is not linked to a creator user account.' }, { status: 409 });
     }
 
     const update: Record<string, unknown> = { status, updated_at: new Date().toISOString() };
@@ -283,24 +209,31 @@ export async function PATCH(request: Request) {
     if (error) throw error;
 
     let delivery = null;
-    if (['accepted', 'rejected', 'shortlisted'].includes(status)) {
+    if (['accepted', 'rejected', 'under_review'].includes(status)) {
       const { data: project } = data.project_id
         ? await s.from('projects').select('*').eq('id', data.project_id).maybeSingle()
         : { data: null };
       const projectTitle = String(project?.title || project?.name || 'your selected project');
-      if (status === 'accepted' && data.creator_user_id && data.project_id) {
+      if (status === 'accepted' && creatorUserId && data.project_id) {
+        const { data: creatorProfile, error: creatorProfileError } = await s
+          .from('creator_profiles')
+          .select('id,user_id,legal_name,stage_name,email')
+          .eq('user_id', creatorUserId)
+          .maybeSingle();
+        if (creatorProfileError) throw creatorProfileError;
+        if (!creatorProfile?.id) throw new Error('Accepted creator does not have a Creator Profile linked to this user account.');
+        const creatorProfileId = String(creatorProfile.id);
         const commissionCode = `COM-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
         const { error: workspaceError } = await s.from('creator_project_workspaces').upsert({
-          application_id: data.id, project_id: data.project_id, creator_id: data.creator_user_id,
-          enterprise_creator_id: data.creator_id || null, title: projectTitle, status: 'active', commission_code: commissionCode,
+          application_id: data.id, project_id: data.project_id, creator_id: creatorUserId,
+          enterprise_creator_id: creatorProfileId, title: projectTitle, status: 'active', commission_code: commissionCode,
           pay_amount: project?.pay_amount ?? project?.budget ?? null, pay_currency: project?.pay_currency || project?.currency || 'GBP',
           payment_schedule: project?.payment_schedule || []
         }, { onConflict: 'application_id' });
         if (workspaceError) throw workspaceError;
-        if (project?.reserved_asset_id && data.creator_id) {
-          const {data:cp}=await s.from('creator_profiles').select('legal_name,stage_name,email').eq('id',data.creator_id).maybeSingle();
-          const {data:existingContributor}=await s.from('asset_contributors').select('id').eq('asset_id',project.reserved_asset_id).eq('creator_id',data.creator_id).maybeSingle();
-          if(!existingContributor) await s.from('asset_contributors').insert({asset_id:project.reserved_asset_id,creator_id:data.creator_id,contributor_name:cp?.legal_name||cp?.stage_name||cp?.email||data.applicant_name||'Accepted creator',role_name:'Contributor',master_share:0,publishing_share:0,allocation_status:'planned'});
+        if (project?.reserved_asset_id) {
+          const {data:existingContributor}=await s.from('asset_contributors').select('id').eq('asset_id',project.reserved_asset_id).eq('creator_id',creatorProfileId).maybeSingle();
+          if(!existingContributor) await s.from('asset_contributors').insert({asset_id:project.reserved_asset_id,creator_id:creatorProfileId,contributor_name:creatorProfile.legal_name||creatorProfile.stage_name||creatorProfile.email||data.applicant_name||'Accepted creator',role_name:'Contributor',master_share:0,publishing_share:0,allocation_status:'planned'});
         }
       }
       delivery = await notifyDecision(s, data, status, projectTitle, String(body.rejectionReason || '') || null);

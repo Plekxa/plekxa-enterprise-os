@@ -14,15 +14,10 @@ export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){try{
  s.from('project_deliverables').select('*').eq('project_id',id).order('created_at')
 ]);
  for(const q of [assetQ,contribQ,workspaceQ,appsQ,creatorsQ,milestonesQ,deliverablesQ])if(q.error)throw q.error;
- const rawWorkspaces=workspaceQ.data||[];
- const activeRawWorkspaces=rawWorkspaces.filter((w:any)=>!['removed','superseded','cancelled'].includes(String(w.status||'').toLowerCase()));
- const workspaceByKey=new Map<string,any>();
- for(const w of activeRawWorkspaces){const key=`${w.enterprise_creator_id||w.creator_id||w.id}:${w.commission_role||'contributor'}`;const prior=workspaceByKey.get(key);if(!prior||new Date(w.created_at||0)<new Date(prior.created_at||0))workspaceByKey.set(key,w);}
- const logicalWorkspaces=Array.from(workspaceByKey.values());
- const workspaceIds=logicalWorkspaces.map((w:any)=>w.id);
+ const workspaceIds=(workspaceQ.data||[]).map((w:any)=>w.id);
  const {data:messages,error:messagesError}=workspaceIds.length?await s.from('commission_messages').select('*').in('workspace_id',workspaceIds).order('created_at'):{data:[],error:null};
  if(messagesError)throw messagesError;
- return NextResponse.json({project:p,asset:assetQ.data,contributors:contribQ.data||[],workspaces:logicalWorkspaces.map((w:any)=>{const cp=(creatorsQ.data||[]).find((c:any)=>c.id===w.enterprise_creator_id||c.user_id===w.creator_id);return {...w,creator_name:cp?.stage_name||cp?.legal_name||cp?.email||'Creator',messages:(messages||[]).filter((m:any)=>m.workspace_id===w.id)}}),applications:appsQ.data||[],creators:creatorsQ.data||[],milestones:milestonesQ.data||[],deliverables:deliverablesQ.data||[]});
+ return NextResponse.json({project:p,asset:assetQ.data,contributors:contribQ.data||[],workspaces:(workspaceQ.data||[]).map((w:any)=>({...w,messages:(messages||[]).filter((m:any)=>m.workspace_id===w.id)})),applications:appsQ.data||[],creators:creatorsQ.data||[],milestones:milestonesQ.data||[],deliverables:deliverablesQ.data||[]});
 }catch(e){return fail(e)}}
 
 export async function POST(r:Request,{params}:{params:Promise<{id:string}>}){try{const {admin:s,user,staff}=await enterpriseContext();const {id}=await params;const b=await r.json();const action=String(b.action||'');const p=await project(s,id);if(!p.reserved_asset_id)throw new Error('Reserve the Project Asset before commissioning creators.');
@@ -38,27 +33,10 @@ export async function POST(r:Request,{params}:{params:Promise<{id:string}>}){try
  }
  if(action==='commission_contributor'){
   const cp=await creator(s,String(b.creator_id||''));const share=Number(b.ownership_percent||0);if(share<0||share>100)return NextResponse.json({error:'Ownership must be between 0 and 100.'},{status:400});const role=String(b.role_name||'Contributor').trim()||'Contributor';
-  const roleKey=role.toLowerCase().replace(/\s+/g,'_');
-  const {data:already,error:alreadyError}=await s.from('creator_project_workspaces').select('*').eq('project_id',id).eq('enterprise_creator_id',cp.id).eq('commission_role',roleKey).not('status','in','(removed,superseded,cancelled)').order('created_at',{ascending:true}).limit(1).maybeSingle();if(alreadyError)throw alreadyError;if(already)return NextResponse.json({error:`${cp.stage_name||cp.legal_name||cp.email||'This creator'} is already commissioned on this Project as ${role}. Open their existing Chat & files workspace instead.`},{status:409});
-  const {data:w,error:we}=await s.from('creator_project_workspaces').insert({project_id:id,creator_id:cp.user_id||null,enterprise_creator_id:cp.id,asset_id:p.reserved_asset_id,title:p.title||p.name,status:'active',commission_code:`COM-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`,commission_role:roleKey,director_can_view:true,pay_amount:Number(b.pay_amount||0),pay_currency:b.pay_currency||p.pay_currency||'GBP'}).select('*').single();if(we)throw we;
+  const {data:w,error:we}=await s.from('creator_project_workspaces').insert({project_id:id,creator_id:cp.user_id||null,enterprise_creator_id:cp.id,asset_id:p.reserved_asset_id,title:p.title||p.name,status:'active',commission_code:`COM-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`,commission_role:role.toLowerCase().replace(/\s+/g,'_'),director_can_view:true,pay_amount:Number(b.pay_amount||0),pay_currency:b.pay_currency||p.pay_currency||'GBP'}).select('*').single();if(we)throw we;
   const {data:existing}=await s.from('asset_contributors').select('id').eq('asset_id',p.reserved_asset_id).eq('creator_id',cp.id).maybeSingle();const row={asset_id:p.reserved_asset_id,creator_id:cp.id,contributor_name:cp.stage_name||cp.legal_name||cp.email||'Contributor',role_name:role,contributor_role:role,master_share:share,ppr_split:share,publishing_share:0,allocation_status:'planned',source_workspace_id:w.id,updated_at:new Date().toISOString()};if(existing)await s.from('asset_contributors').update(row).eq('id',existing.id);else{const q=await s.from('asset_contributors').insert(row);if(q.error)throw q.error;}
   const {error:ve}=await s.rpc('plekxa_validate_asset_ownership',{p_asset_id:p.reserved_asset_id});if(ve){await s.from('creator_project_workspaces').delete().eq('id',w.id);throw ve;}
   await audit(s,user,staff,'creator_commissioned','project',id,{creator_id:cp.id,role,asset_id:p.reserved_asset_id,ownership_percent:share,workspace_id:w.id});return NextResponse.json({ok:true,workspace:w});
- }
- if(action==='remove_workspace'){
-  const wid=String(b.workspace_id||'');if(!wid)return NextResponse.json({error:'Contributor workspace is required.'},{status:400});
-  const {data:w,error:we}=await s.from('creator_project_workspaces').select('*').eq('id',wid).eq('project_id',id).single();if(we)throw we;
-  const q=await s.from('creator_project_workspaces').update({status:'removed'}).eq('id',wid);if(q.error)throw q.error;
-  if(w.enterprise_creator_id){const aq=await s.from('asset_contributors').update({allocation_status:'removed',updated_at:new Date().toISOString()}).eq('asset_id',p.reserved_asset_id).eq('creator_id',w.enterprise_creator_id);if(aq.error)throw aq.error;}
-  if(String(w.commission_role||'')==='director'&&p.director_creator_id===w.enterprise_creator_id){const pq=await s.from('projects').update({director_creator_id:null,director_user_id:null,director_ownership_percent:null}).eq('id',id);if(pq.error)throw pq.error;}
-  await audit(s,user,staff,'creator_removed_from_project','project',id,{workspace_id:wid,creator_id:w.enterprise_creator_id,role:w.commission_role});return NextResponse.json({ok:true});
- }
- if(action==='remove_director'){
-  const creatorId=p.director_creator_id;if(!creatorId)return NextResponse.json({error:'This Project has no Director assigned.'},{status:409});
-  const pq=await s.from('projects').update({director_creator_id:null,director_user_id:null,director_ownership_percent:null}).eq('id',id);if(pq.error)throw pq.error;
-  await s.from('creator_project_workspaces').update({status:'removed'}).eq('project_id',id).eq('enterprise_creator_id',creatorId).eq('commission_role','director');
-  await s.from('asset_contributors').update({allocation_status:'removed',updated_at:new Date().toISOString()}).eq('asset_id',p.reserved_asset_id).eq('creator_id',creatorId).ilike('role_name','director');
-  await audit(s,user,staff,'director_removed','project',id,{creator_id:creatorId});return NextResponse.json({ok:true});
  }
  if(action==='add_milestone'){
   const title=String(b.title||'').trim();if(!title)return NextResponse.json({error:'Milestone title is required.'},{status:400});

@@ -3,6 +3,7 @@ import {useEffect,useState} from 'react';
 import {usePathname} from 'next/navigation';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
+import MobileBottomNav from './MobileBottomNav';
 
 type Access={role:string;permissions:string[];isMaster:boolean};
 
@@ -29,5 +30,5 @@ export default function AdminShell({children}:{children:React.ReactNode}){
  useEffect(()=>setMobileNavOpen(false),[pathname]);
  useEffect(()=>{document.body.style.overflow=mobileNavOpen?'hidden':'';return()=>{document.body.style.overflow=''}},[mobileNavOpen]);
  const allowed=isSuperAdmin(access)||pathname.startsWith('/search')||routeAllowed(pathname,access?.permissions||[]);
- return <div className="shell"><Sidebar mobileOpen={mobileNavOpen} onClose={()=>setMobileNavOpen(false)} access={access}/><main className="main"><Topbar onMenuClick={()=>setMobileNavOpen(true)}/><div className="content">{error?<div className="access-denied"><strong>Access unavailable</strong><p>{error}</p></div>:!access?<div className="access-loading">Loading access…</div>:allowed?children:<div className="access-denied"><strong>Access restricted</strong><p>Your {access.role} role does not have permission to open this work area.</p></div>}</div></main></div>
+ return <div className="shell"><Sidebar mobileOpen={mobileNavOpen} onClose={()=>setMobileNavOpen(false)} access={access}/><main className="main"><Topbar onMenuClick={()=>setMobileNavOpen(true)}/><div className="content">{error?<div className="access-denied"><strong>Access unavailable</strong><p>{error}</p></div>:!access?<div className="access-loading">Loading access…</div>:allowed?children:<div className="access-denied"><strong>Access restricted</strong><p>Your {access.role} role does not have permission to open this work area.</p></div>}</div></main><MobileBottomNav access={access} onMore={()=>setMobileNavOpen(true)}/></div>
 }
